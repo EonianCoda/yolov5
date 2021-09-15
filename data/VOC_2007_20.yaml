@@ -18,5 +18,23 @@ test: # test images (optional)
 
 # Classes
 nc: 20
-names: ['aeroplane', 'bicycle', 'bird', 'boat', 'bottle', 'bus', 'car', 'cat', 'chair', 'cow', 'diningtable', 'dog',
-        'horse', 'motorbike', 'person', 'pottedplant', 'sheep', 'sofa', 'train', 'tvmonitor']  # class names
+names: ['person',
+ 'car',
+ 'bicycle',
+ 'bus',
+ 'motorbike',
+ 'train',
+ 'aeroplane',
+ 'boat',
+ 'chair',
+ 'bottle',
+ 'diningtable',
+ 'pottedplant',
+ 'tvmonitor',
+ 'sofa',
+ 'bird',
+ 'cat',
+ 'cow',
+ 'dog',
+ 'horse',
+ 'sheep'] # class names
