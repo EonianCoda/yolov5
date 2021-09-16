@@ -16,7 +16,6 @@ EMPTY_STATE = {'knowing_class':{'id':[],'name':[]},
 
 class Enhance_COCO(COCO):
     def __init__(self, path):
-
         super().__init__(path)
         self.classes = defaultdict()
         self.reverse_classes = defaultdict()
@@ -133,11 +132,11 @@ class Enhance_COCO(COCO):
         return result
 
 class IL_states(object):
-    def __init__(self, coco_path: str, scenario_list:list, shuffle_class:bool):
+    def __init__(self, coco_path: str, scenario_list:list):
         
         self.coco = Enhance_COCO(coco_path)
         self.total_states_num = len(scenario_list)
-        self.init_states(scenario_list, shuffle_class)
+        self.init_states(scenario_list)
 
 
     def init_states(self, scenario_list:list, shuffle = False):

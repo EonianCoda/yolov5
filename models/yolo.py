@@ -52,7 +52,9 @@ class Detect(nn.Module):
         for i in range(self.nl):
             x[i] = self.m[i](x[i])  # conv
             bs, _, ny, nx = x[i].shape  # x(bs,255,20,20) to x(bs,3,20,20,85)
-            x[i] = x[i].view(bs, self.na, self.no, ny, nx).permute(0, 1, 3, 4, 2).contiguous()
+
+            # final shape = (batch_size, anchors, y, x, classes + 5)
+            x[i] = x[i].view(bs, self.na, self.no, ny, nx).permute(0, 1, 3, 4, 2).contiguous() 
 
             if not self.training:  # inference
                 if self.grid[i].shape[2:4] != x[i].shape[2:4] or self.onnx_dynamic:
@@ -69,6 +71,36 @@ class Detect(nn.Module):
                 z.append(y.view(bs, -1, self.no))
 
         return x if self.training else (torch.cat(z, 1), x)
+
+    def expand_classes(self, num_new_classes:int):
+        na = self.na
+        # class number
+        old_nc = self.nc
+        new_nc = old_nc + num_new_classes
+        old_no = self.no
+        new_no = new_nc + 5
+        # model
+        old_head = self.m
+        new_head = nn.ModuleList(nn.Conv2d(m.in_channels, new_no * self.na, 1) for m in self.m)
+        # init new model's bias
+        for layer, s in zip(new_head, self.stride):
+            b = layer.bias.view(self.na, -1) # from (na * (new_classes + 5)) to (na, num_classes + 5)
+            b.data[:, 4] += math.log(8 / (640 / s) ** 2)  # obj (8 objects per 640 image)
+            b.data[:, 5:] += math.log(0.6 / (num_new_classes - 0.99))# cls
+            layer.bias = torch.nn.Parameter(b.view(-1), requires_grad=True)
+
+        # copy weight amd bias from old head
+        for i in range(self.nl):
+            w = new_head[i].weight.view(na, new_no, -1) # weight shape from (in_channels, out_channels, 1, 1) to (na, new_classes number + 5, -1)
+            b = new_head[i].bias.view(na, -1)
+            w[:,:old_no,:].data = old_head[i].weight.view(na, old_no, -1).data
+            b[:,:old_no].data = old_head[i].bias.view(na, old_no, -1).data
+        
+        
+        self.nc = new_nc
+        self.no = new_no
+        self.m = new_head
+        del old_head
 
     @staticmethod
     def _make_grid(nx=20, ny=20):
@@ -219,6 +251,12 @@ class Model(nn.Module):
 
     def info(self, verbose=False, img_size=640):  # print model information
         model_info(self, verbose, img_size)
+
+    def expand_classes(self, num_new_classes:int, new_class_name:list):
+        m = self.model[-1]  # Detect() module
+        m.expand_classes(num_new_classes)
+        self.yaml['nc'] = self.yaml['nc'] + num_new_classes
+        self.names.extend(new_class_name)
 
 
 def parse_model(d, ch):  # model_dict, input_channels(3)
