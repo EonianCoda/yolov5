@@ -17,7 +17,7 @@ test: # test images (optional)
   - images/test
 
 # Classes
-nc: 20
+nc: 19
 names: ['person',
  'car',
  'bicycle',
