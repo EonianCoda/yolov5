@@ -73,7 +73,6 @@ class Detect(nn.Module):
         return x if self.training else (torch.cat(z, 1), x)
 
     def expand_classes(self, num_new_classes:int):
-        na = self.na
         # class number
         old_nc = self.nc
         new_nc = old_nc + num_new_classes
@@ -91,11 +90,11 @@ class Detect(nn.Module):
 
         # copy weight amd bias from old head
         for i in range(self.nl):
-            w = new_head[i].weight.view(na, new_no, -1) # weight shape from (in_channels, out_channels, 1, 1) to (na, new_classes number + 5, -1)
-            b = new_head[i].bias.view(na, -1)
+            w = new_head[i].weight.view(self.na, new_no, -1) # weight shape from (in_channels, out_channels, 1, 1) to (na, new_classes number + 5, -1)
+            b = new_head[i].bias.view(self.na, -1)
             
-            w.data[:,:old_no,:] = old_head[i].weight.view(na, old_no, -1).data
-            b.data[:,:old_no] = old_head[i].bias.view(na, -1).data
+            w.data[:,:old_no,:] = old_head[i].weight.view(self.na, old_no, -1).data
+            b.data[:,:old_no] = old_head[i].bias.view(self.na, -1).data
             
             new_head[i].weight = torch.nn.Parameter(w.view(new_head[i].weight.shape), requires_grad=True)
             new_head[i].bias = torch.nn.Parameter(b.view(-1), requires_grad=True)
