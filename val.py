@@ -248,7 +248,7 @@ def run(data,
 
     # save results per class
     describ = 'Class,Precision,Recall,AP@0.5,AP@0.5:0.95\n'
-    pf = '%s'+ ',%.3g\n' * 4 #print format
+    pf = '%s'+ ',%.3g' * 4 + '\n' #print format
     lines = [describ, pf % ('all', mp, mr, map50, map)]
     for i, c in enumerate(ap_class):
         lines.append(pf % (names[c], p[i], r[i], ap50[i], ap[i]))
