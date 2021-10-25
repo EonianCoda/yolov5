@@ -247,14 +247,14 @@ def run(data,
             print(pf % (names[c], seen, nt[c], p[i], r[i], ap50[i], ap[i]))
 
     # save results per class
-    describ = 'Class,Precision,Recall,AP@0.5,AP@0.5:0.95'
-    pf = '%s'+ ',%.3g' * 4 #print format
+    describ = 'Class,Precision,Recall,AP@0.5,AP@0.5:0.95\n'
+    pf = '%s'+ ',%.3g\n' * 4 #print format
     lines = [describ, pf % ('all', mp, mr, map50, map)]
     for i, c in enumerate(ap_class):
         lines.append(pf % (names[c], p[i], r[i], ap50[i], ap[i]))
     with open(save_dir / 'results.csv', 'w') as f:
-        f.write(lines)
-        
+        f.writelines(lines)
+
 
     # Print speeds
     t = tuple(x / seen * 1E3 for x in dt)  # speeds per image
