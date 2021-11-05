@@ -133,7 +133,6 @@ class Enhance_COCO(COCO):
 
 class IL_states(object):
     def __init__(self, coco_path: str, scenario_list:list):
-        self.total_states_num = sum(scenario_list)
         self.scenario = "+".join(scenario_list)
         self._init_states(Enhance_COCO(coco_path), scenario_list)
 
@@ -197,4 +196,4 @@ class IL_states(object):
         return self.states[key]
 
     def __len__(self):
-        return self.total_states_num
+        return self.total_class_num

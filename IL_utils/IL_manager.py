@@ -20,19 +20,19 @@ class IL_manager(object):
         images_txt_root.mkdir(exist_ok=True)
 
         data_dict = { 'names':self.il_states[cur_state]['knowing_class']['name'],
-                    'nc':self.il_states[cur_state]['knowing_class_num'],
+                    'nc':self.il_states[cur_state]['num_knowing_class'],
                     'train':images_txt_root / f'train_images_{self.il_states.scenario}_{cur_state}.txt',
                     'val':images_txt_root / f'test_images_{self.il_states.scenario}_{cur_state}.txt',
                     'test':images_txt_root / f'test_images_{self.il_states.scenario}_{cur_state}.txt',
                     }
-        
-        
         if not Path(data_dict['train']).exists():
-            lines = [IMG_FILE_ROOT / '{:06d}.jpg'.format(img_id) / '.jpg\n' for img_id in self.train_coco.get_imgs_by_cats(self.il_states[cur_state]['new_class']['id'])]
+            lines = [str(IMG_FILE_ROOT / '{:06d}.jpg\n'.format(img_id)) for img_id in self.train_coco.get_imgs_by_cats(self.il_states[cur_state]['new_class']['id'])]
+            #lines[-1] = lines[-1][:-1] # discard new line
             with open(data_dict['train'], 'w') as f:
                 f.writelines(lines)
         if not Path(data_dict['test']).exists():
-            lines = [IMG_FILE_ROOT / '{:06d}.jpg'.format(img_id) / '.jpg\n' for img_id in self.test_coco.get_imgs_by_cats(self.il_states[cur_state]['knowing_class']['id'])]
+            lines = [str(IMG_FILE_ROOT / '{:06d}.jpg\n'.format(img_id)) for img_id in self.test_coco.get_imgs_by_cats(self.il_states[cur_state]['knowing_class']['id'])]
+            #lines[-1] = lines[-1][:-1] # discard new line
             with open(data_dict['test'], 'w') as f:            
                 f.writelines(lines)
         return data_dict
