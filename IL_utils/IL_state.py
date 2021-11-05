@@ -1,5 +1,6 @@
 
 
+from _typeshed import Self
 import random
 import copy
 from collections import defaultdict
@@ -133,13 +134,11 @@ class Enhance_COCO(COCO):
 
 class IL_states(object):
     def __init__(self, coco_path: str, scenario_list:list):
-        
-        self.coco = Enhance_COCO(coco_path)
-        self.total_states_num = len(scenario_list)
-        self.init_states(scenario_list)
+        self.total_states_num = sum(scenario_list)
+        self.scenario = "+".join(scenario_list)
+        self._init_states(Enhance_COCO(coco_path), scenario_list)
 
-
-    def init_states(self, scenario_list:list, shuffle = False):
+    def _init_states(self, coco_obj:Enhance_COCO, scenario_list:list, shuffle = False):
         """init incremeantal learning task
             Args:
                 scenario: the incremental learning scenario
@@ -148,38 +147,31 @@ class IL_states(object):
 
         self.states = dict([(idx, copy.deepcopy(EMPTY_STATE)) for idx, _ in enumerate(scenario_list)])
 
-        classes = sorted(self.coco.classes.values())
+        classes = sorted(coco_obj.classes.values())
         if shuffle:
             random.shuffle(classes)
-
-        if scenario_list == ['15','1']:
-            scenario_list = [15, 1]
-            classes[15] = 'train'
-        else:
-        
-            total_num = 0
-            for idx, target in enumerate(scenario_list):
-                if isinstance(target, str):
-                    if target.isnumeric():
-                        scenario_list[idx] = int(target)
-                        total_num += int(target)
-                    else:
-                        classes[total_num] = target
-                        scenario_list[idx] = 1
-                        total_num += 1
-                elif isinstance(target, int):
-                    scenario_list[idx] = target
-                    total_num += target
-                
-        #for 15+1=train
+  
         total_num = 0
+        for idx, target in enumerate(scenario_list):
+            if isinstance(target, str):
+                if target.isnumeric():
+                    scenario_list[idx] = int(target)
+                    total_num += int(target)
+                else:
+                    classes[total_num] = target
+                    scenario_list[idx] = 1
+                    total_num += 1
+            elif isinstance(target, int):
+                scenario_list[idx] = target
+                total_num += target
+                
         for idx, num in enumerate(scenario_list):
             self.states[idx]['num_new_class'] = num
             total_num += num
             # non-incremental initial state
             if idx == 0:
                 self.states[idx]['new_class']['name'].extend(classes[:total_num])
-                self.states[idx]['new_class']['id'] = self.coco.catName_to_id(self.states[idx]['new_class']['name'], sort=True)
+                self.states[idx]['new_class']['id'] = coco_obj.catName_to_id(self.states[idx]['new_class']['name'], sort=False)
                 self.states[idx]['knowing_class']['name'] = self.states[idx]['new_class']['name']
                 self.states[idx]['knowing_class']['id'] = self.states[idx]['new_class']['id']
                 self.states[idx]['num_knowing_class'] = num
@@ -190,8 +182,7 @@ class IL_states(object):
             self.states[idx]['num_knowing_class'] = total_num
 
             self.states[idx]['new_class']['name'].extend(classes[total_num - num:total_num])
-            # it is well-sorted
-            self.states[idx]['new_class']['id'] = self.coco.catName_to_id(self.states[idx]['new_class']['name'], sort=True)
+            self.states[idx]['new_class']['id'] = coco_obj.catName_to_id(self.states[idx]['new_class']['name'], sort=False)
 
 
             self.states[idx]['knowing_class']['name'].extend(self.states[idx - 1]['knowing_class']['name'])
