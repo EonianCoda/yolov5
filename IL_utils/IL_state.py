@@ -1,6 +1,5 @@
 
 
-from _typeshed import Self
 import random
 import copy
 from collections import defaultdict

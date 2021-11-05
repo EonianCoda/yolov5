@@ -1,6 +1,5 @@
-from IL_state import IL_states, Enhance_COCO
+from .IL_state import IL_states, Enhance_COCO
 from pathlib import Path
-import os
 DATA_ROOT = Path('../dataset/voc2007/')
 
 IMG_FILE_ROOT = DATA_ROOT / 'images'
