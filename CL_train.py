@@ -470,7 +470,6 @@ def parse_opt(known=False):
     parser.add_argument('--patience', type=int, default=100, help='EarlyStopping patience (epochs without improvement)')
     # CL_training 
     parser.add_argument('--start_state', type=int)
-    #parser.add_argument('--end_state', type=int)
     parser.add_argument('--scenario', help='the scenario of states, must be "20", "19 1", "10 10", "15 1", "15 1 1 1 1"', nargs="+", default=[20])
 
 
