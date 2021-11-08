@@ -30,6 +30,7 @@ from utils.plots import plot_images, output_to_target, plot_study_txt
 from utils.torch_utils import select_device, time_sync
 from utils.callbacks import Callbacks
 
+from CL_utils.CL_manager import CL_manager
 
 def save_one_txt(predn, save_conf, shape, file):
     # Save one txt result
@@ -78,7 +79,8 @@ def process_batch(detections, labels, iouv):
 
 
 @torch.no_grad()
-def run(data,
+def run(scenario,
+        start_state,
         weights=None,  # model.pt path(s)
         batch_size=32,  # batch size
         imgsz=640,  # inference size (pixels)
@@ -104,6 +106,12 @@ def run(data,
         callbacks=Callbacks(),
         compute_loss=None,
         ):
+
+
+    # Continual learning 
+    cl_manager = CL_manager(scenario)
+    data = cl_manager.gen_data_dict(start_state)
+
     # Initialize/load model and set device
     training = model is not None
     if training:  # called by train.py
@@ -127,7 +135,7 @@ def run(data,
         #     model = nn.DataParallel(model)
 
         # Data
-        data = check_dataset(data)  # check
+        # = check_dataset(data)  # check
 
     # Half
     half &= device.type != 'cpu'  # half precision only supported on CUDA
@@ -325,6 +333,9 @@ def parse_opt():
     parser.add_argument('--name', default='exp', help='save to project/name')
     parser.add_argument('--exist-ok', action='store_true', help='existing project/name ok, do not increment')
     parser.add_argument('--half', action='store_true', help='use FP16 half-precision inference')
+    # For continual learning
+    parser.add_argument('--start_state', type=int)
+    parser.add_argument('--scenario', help='the scenario of states, must be "20", "19 1", "10 10", "15 1", "15 1 1 1 1"', nargs="+", default=[20])
     opt = parser.parse_args()
     opt.save_json |= opt.data.endswith('coco.yaml')
     opt.save_txt |= opt.save_hybrid
