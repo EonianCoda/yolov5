@@ -337,7 +337,7 @@ def parse_opt():
     # For continual learning
 
     opt = parser.parse_args()
-    opt.save_json |= opt.data.endswith('coco.yaml')
+    #opt.save_json |= opt.data.endswith('coco.yaml')
     opt.save_txt |= opt.save_hybrid
     return opt
 

@@ -63,7 +63,7 @@ class CL_manager(object):
 
         #Training Labels
         target_path = DATA_ROOT / 'labels' #/ 'train'
-        target_path.mkdir(exist_ok=True)
+        #target_path.mkdir(exist_ok=True)
         seen_ids = self.cl_states[cur_state]['new_class']['id']
         img_ids = self.train_coco.get_imgs_by_cats(seen_ids)
         start_idx = self.cl_states[cur_state]['num_past_class']
@@ -71,7 +71,7 @@ class CL_manager(object):
 
         #Testing Labels
         target_path = DATA_ROOT / 'labels' #/ 'test'
-        target_path.mkdir(exist_ok=True)
+        #target_path.mkdir(exist_ok=True)
         seen_ids = self.cl_states[cur_state]['knowing_class']['id']
         img_ids = self.test_coco.get_imgs_by_cats(seen_ids)
         start_idx = 0
