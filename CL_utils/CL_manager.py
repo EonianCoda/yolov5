@@ -1,15 +1,15 @@
-from .IL_state import IL_states, Enhance_COCO
+from .CL_state import CL_states, Enhance_COCO
 from pathlib import Path
 DATA_ROOT = Path('../dataset/voc2007/')
 
-IMG_FILE_ROOT = DATA_ROOT / 'images'
+IMG_FCLE_ROOT = DATA_ROOT / 'images'
 TRAIN_DATA = DATA_ROOT / "annotations/voc2007_trainval.json"
 TEST_DATA = DATA_ROOT / "annotations/voc2007_test.json"
 
 
-class IL_manager(object):
+class CL_manager(object):
     def __init__(self, scenario:list):
-        self.il_states = IL_states(TRAIN_DATA, scenario)
+        self.cl_states = CL_states(TRAIN_DATA, scenario)
         self.train_coco =  Enhance_COCO(TRAIN_DATA)
         self.test_coco = Enhance_COCO(TEST_DATA)
 
@@ -19,20 +19,18 @@ class IL_manager(object):
         images_txt_root = Path("images_paths")
         images_txt_root.mkdir(exist_ok=True)
 
-        data_dict = { 'names':self.il_states[cur_state]['knowing_class']['name'],
-                    'nc':self.il_states[cur_state]['num_knowing_class'],
-                    'train':images_txt_root / f'train_images_{self.il_states.scenario}_{cur_state}.txt',
-                    'val':images_txt_root / f'test_images_{self.il_states.scenario}_{cur_state}.txt',
-                    'test':images_txt_root / f'test_images_{self.il_states.scenario}_{cur_state}.txt',
+        data_dict = { 'names':self.cl_states[cur_state]['knowing_class']['name'],
+                    'nc':self.cl_states[cur_state]['num_knowing_class'],
+                    'train':images_txt_root / f'train_images_{self.cl_states.scenario}_{cur_state}.txt',
+                    'val':images_txt_root / f'test_images_{self.cl_states.scenario}_{cur_state}.txt',
+                    'test':images_txt_root / f'test_images_{self.cl_states.scenario}_{cur_state}.txt',
                     }
         if not Path(data_dict['train']).exists():
-            lines = [str(IMG_FILE_ROOT / '{:06d}.jpg\n'.format(img_id)) for img_id in self.train_coco.get_imgs_by_cats(self.il_states[cur_state]['new_class']['id'])]
-            #lines[-1] = lines[-1][:-1] # discard new line
+            lines = [str(IMG_FCLE_ROOT / '{:06d}.jpg\n'.format(img_id)) for img_id in self.train_coco.get_imgs_by_cats(self.cl_states[cur_state]['new_class']['id'])]
             with open(data_dict['train'], 'w') as f:
                 f.writelines(lines)
         if not Path(data_dict['test']).exists():
-            lines = [str(IMG_FILE_ROOT / '{:06d}.jpg\n'.format(img_id)) for img_id in self.test_coco.get_imgs_by_cats(self.il_states[cur_state]['knowing_class']['id'])]
-            #lines[-1] = lines[-1][:-1] # discard new line
+            lines = [str(IMG_FCLE_ROOT / '{:06d}.jpg\n'.format(img_id)) for img_id in self.test_coco.get_imgs_by_cats(self.cl_states[cur_state]['knowing_class']['id'])]
             with open(data_dict['test'], 'w') as f:            
                 f.writelines(lines)
         return data_dict
@@ -67,7 +65,7 @@ class IL_manager(object):
         #Training Labels
         target_path = DATA_ROOT / 'labels' / 'train'
         target_path.mkdir(exist_ok=True)
-        seen_ids = self.il_states[cur_state]['new_class']['id']
+        seen_ids = self.cl_states[cur_state]['new_class']['id']
         img_ids = self.train_coco.get_imgs_by_cats(seen_ids)
         start_idx = 0 
         gen_labels(target_path, img_ids, self.train_coco, seen_ids, start_idx)
@@ -75,7 +73,7 @@ class IL_manager(object):
         #Testing Labels
         target_path = DATA_ROOT / 'labels' / 'test'
         target_path.mkdir(exist_ok=True)
-        seen_ids = self.il_states[cur_state]['knowing_class']['id']
+        seen_ids = self.cl_states[cur_state]['knowing_class']['id']
         img_ids = self.test_coco.get_imgs_by_cats(seen_ids)
-        start_idx = self.il_states[cur_state]['num_past_class']
+        start_idx = self.cl_states[cur_state]['num_past_class']
         gen_labels(target_path, img_ids, self.test_coco, seen_ids, start_idx)

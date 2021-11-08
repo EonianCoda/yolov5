@@ -1,6 +1,6 @@
 #built-in
 
-from IL_utils.IL_cfg import IL_cfg
+from CL_utils.CL_cfg import CL_cfg
 import os
 import numpy as np
 # torch
@@ -13,7 +13,7 @@ from torch import optim
 #yolov5 package
 from models.yolo import Model
 
-class IL_Trainer(object):
+class CL_Trainer(object):
     def __init__(self, cfg, nc:int):
         """
         Args:
@@ -21,19 +21,19 @@ class IL_Trainer(object):
             nc: number classes
         """
         hyp = cfg.hpy
-        self.il_cfg = IL_cfg(cfg)
+        self.cl_cfg = CL_cfg(cfg)
         self.cfg = cfg
 
         # create model
         self.model = Model(cfg, ch=3, nc=nc, anchors=hyp.get('anchors')).cuda()
-        self.cur_state = self.il_cfg['start_state']
+        self.cur_state = self.cl_cfg['start_state']
         
 
     def next_state(self):
-        if self.cur_state + 1 >= self.il_cfg['end_state']:
+        if self.cur_state + 1 >= self.cl_cfg['end_state']:
             raise ("Next state dose not exist!")
         self.cur_state += 1
-        num_new_classes = self.il_cfg.states.states[self.cur_state]['num_new_classes']
+        num_new_classes = self.cl_cfg.states.states[self.cur_state]['num_new_classes']
         # expand_classes
         self.model.expand_classes(num_new_classes)
         # create optimizer

@@ -49,7 +49,7 @@ from utils.loggers import Loggers
 from utils.callbacks import Callbacks
 
 
-from IL_utils.IL_manager import IL_manager
+from CL_utils.CL_manager import CL_manager
 
 LOGGER = logging.getLogger(__name__)
 LOCAL_RANK = int(os.getenv('LOCAL_RANK', -1))  # https://pytorch.org/docs/stable/elastic/run.html
@@ -65,11 +65,13 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
     save_dir, epochs, batch_size, weights, single_cls, evolve, cfg, resume, noval, nosave, workers, freeze, = \
         Path(opt.save_dir), opt.epochs, opt.batch_size, opt.weights, opt.single_cls, opt.evolve, opt.cfg, \
         opt.resume, opt.noval, opt.nosave, opt.workers, opt.freeze
+
+    # Continual learning 
     scenario = opt.scenario
     start_state = opt.start_state
-    il_manager = IL_manager(scenario)
-    data_dict = il_manager.gen_data_dict(start_state)
-    il_manager.gen_yolo_lables(start_state) # generate yolo format lables
+    cl_manager = CL_manager(scenario)
+    data_dict = cl_manager.gen_data_dict(start_state)
+    cl_manager.gen_yolo_lables(start_state) # generate yolo format lables
 
 
     # Directories
@@ -466,7 +468,7 @@ def parse_opt(known=False):
     parser.add_argument('--local_rank', type=int, default=-1, help='DDP parameter, do not modify')
     parser.add_argument('--freeze', type=int, default=0, help='Number of layers to freeze. backbone=10, all=24')
     parser.add_argument('--patience', type=int, default=100, help='EarlyStopping patience (epochs without improvement)')
-    # IL_training 
+    # CL_training 
     parser.add_argument('--start_state', type=int)
     #parser.add_argument('--end_state', type=int)
     parser.add_argument('--scenario', help='the scenario of states, must be "20", "19 1", "10 10", "15 1", "15 1 1 1 1"', nargs="+", default=[20])
@@ -482,7 +484,7 @@ def main(opt, callbacks=Callbacks()):
     if RANK in [-1, 0]:
         print(colorstr('train: ') + ', '.join(f'{k}={v}' for k, v in vars(opt).items()))
         check_git_status()
-        check_requirements(requirements=FILE.parent / 'requirements.txt', exclude=['thop'])
+        check_requirements(requirements=FCLE.parent / 'requirements.txt', exclude=['thop'])
 
     # Resume
     if opt.resume and not check_wandb_resume(opt) and not opt.evolve:  # resume an interrupted run

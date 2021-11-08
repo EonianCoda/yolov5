@@ -1,5 +1,3 @@
-
-
 import random
 import copy
 from collections import defaultdict
@@ -131,7 +129,7 @@ class Enhance_COCO(COCO):
         result.sort_values(by=['image'], ascending=False)
         return result
 
-class IL_states(object):
+class CL_states(object):
     def __init__(self, coco_path: str, scenario_list:list):
         self.scenario = "+".join(scenario_list)
         self._init_states(Enhance_COCO(coco_path), scenario_list)
@@ -162,13 +160,15 @@ class IL_states(object):
             elif isinstance(target, int):
                 scenario_list[idx] = target
                 total_num += target
-                
+        
+
+        total_num = 0
         for idx, num in enumerate(scenario_list):
             self.states[idx]['num_new_class'] = num
             total_num += num
             # non-incremental initial state
             if idx == 0:
-                self.states[idx]['new_class']['name'].extend(classes[:total_num])
+                self.states[idx]['new_class']['name'].extend(classes[:num])
                 self.states[idx]['new_class']['id'] = coco_obj.catName_to_id(self.states[idx]['new_class']['name'], sort=False)
                 self.states[idx]['knowing_class']['name'] = self.states[idx]['new_class']['name']
                 self.states[idx]['knowing_class']['id'] = self.states[idx]['new_class']['id']
@@ -189,7 +189,6 @@ class IL_states(object):
             self.states[idx]['knowing_class']['id'].extend(self.states[idx]['new_class']['id'])
 
         self.total_class_num = total_num
-
     def __getitem__(self, key):
         if isinstance(key, int) and key < 0:
             key = list(self.states.keys())[key]
