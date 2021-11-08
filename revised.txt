@@ -1,4 +1,4 @@
 2021/11/08:
 1. utils/datset.py:
-    line 402~411
+    change function img2label_paths
 2.

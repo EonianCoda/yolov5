@@ -6,6 +6,7 @@ IMG_FCLE_ROOT = DATA_ROOT / 'images'
 TRAIN_DATA = DATA_ROOT / "annotations/voc2007_trainval.json"
 TEST_DATA = DATA_ROOT / "annotations/voc2007_test.json"
 
+IMAGE_TXT_ROOT = DATA_ROOT / 'images_paths'
 
 class CL_manager(object):
     def __init__(self, scenario:list):
@@ -16,14 +17,12 @@ class CL_manager(object):
     def gen_data_dict(self, cur_state:int):
         """generate data dictionary (replace the yaml file, for example: VOC_2007.yaml)
         """
-        images_txt_root = Path("images_paths")
-        images_txt_root.mkdir(exist_ok=True)
 
         data_dict = { 'names':self.cl_states[cur_state]['knowing_class']['name'],
                     'nc':self.cl_states[cur_state]['num_knowing_class'],
-                    'train':images_txt_root / f'train_images_{self.cl_states.scenario}_{cur_state}.txt',
-                    'val':images_txt_root / f'test_images_{self.cl_states.scenario}_{cur_state}.txt',
-                    'test':images_txt_root / f'test_images_{self.cl_states.scenario}_{cur_state}.txt',
+                    'train':IMAGE_TXT_ROOT / f'train_images_{self.cl_states.scenario}_{cur_state}.txt',
+                    'val':IMAGE_TXT_ROOT / f'test_images_{self.cl_states.scenario}_{cur_state}.txt',
+                    'test':IMAGE_TXT_ROOT / f'test_images_{self.cl_states.scenario}_{cur_state}.txt',
                     }
         if not Path(data_dict['train']).exists():
             lines = [str(IMG_FCLE_ROOT / '{:06d}.jpg\n'.format(img_id)) for img_id in self.train_coco.get_imgs_by_cats(self.cl_states[cur_state]['new_class']['id'])]
@@ -67,7 +66,7 @@ class CL_manager(object):
         target_path.mkdir(exist_ok=True)
         seen_ids = self.cl_states[cur_state]['new_class']['id']
         img_ids = self.train_coco.get_imgs_by_cats(seen_ids)
-        start_idx = 0 
+        start_idx = self.cl_states[cur_state]['num_past_class']
         gen_labels(target_path, img_ids, self.train_coco, seen_ids, start_idx)
 
         #Testing Labels
@@ -75,5 +74,5 @@ class CL_manager(object):
         target_path.mkdir(exist_ok=True)
         seen_ids = self.cl_states[cur_state]['knowing_class']['id']
         img_ids = self.test_coco.get_imgs_by_cats(seen_ids)
-        start_idx = self.cl_states[cur_state]['num_past_class']
+        start_idx = 0
         gen_labels(target_path, img_ids, self.test_coco, seen_ids, start_idx)
