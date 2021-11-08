@@ -357,16 +357,10 @@ class LoadStreams:  # multiple IP or RTSP cameras
     def __len__(self):
         return len(self.sources)  # 1E12 frames = 32 streams at 30 FPS for 30 years
 
-# Origin function
-# def img2label_paths(img_paths):
-#     # Define label paths as a function of image paths
-#     sa, sb = os.sep + 'images' + os.sep, os.sep + 'labels' + os.sep  # /images/, /labels/ substrings
-#     return [sb.join(x.rsplit(sa, 1)).rsplit('.', 1)[0] + '.txt' for x in img_paths]
 
-# Revised Version
 def img2label_paths(img_paths):
     # Define label paths as a function of image paths
-    sa, sb = os.sep + 'images_paths' + os.sep, os.sep + 'labels' + os.sep  # /images/, /labels/ substrings
+    sa, sb = os.sep + 'images' + os.sep, os.sep + 'labels' + os.sep  # /images/, /labels/ substrings
     return [sb.join(x.rsplit(sa, 1)).rsplit('.', 1)[0] + '.txt' for x in img_paths]
 
 
