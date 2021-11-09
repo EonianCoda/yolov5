@@ -26,17 +26,17 @@ class CL_manager(object):
                     'val':IMAGE_TXT_ROOT / f'test_images_{self.cl_states.scenario}_{cur_state}.txt',
                     'test':IMAGE_TXT_ROOT / f'test_images_{self.cl_states.scenario}_{cur_state}.txt',
                     }
-        if not Path(data_dict['train']).exists():
-            lines = [str(IMG_FILE_ROOT / '{:06d}.jpg\n'.format(img_id)) for img_id in self.train_coco.get_imgs_by_cats(self.cl_states[cur_state]['new_class']['id'])]
-            if self.test_replay:
-                from CL_replay import read_exemplar
-                lines += [str(IMG_FILE_ROOT / '{:06d}.jpg\n'.format(img_id)) for img_id in read_exemplar()]
-            with open(data_dict['train'], 'w') as f:
-                f.writelines(lines)
-        if not Path(data_dict['test']).exists():
-            lines = [str(IMG_FILE_ROOT / '{:06d}.jpg\n'.format(img_id)) for img_id in self.test_coco.get_imgs_by_cats(self.cl_states[cur_state]['knowing_class']['id'])]
-            with open(data_dict['test'], 'w') as f:            
-                f.writelines(lines)
+        #if not Path(data_dict['train']).exists():
+        lines = [str(IMG_FILE_ROOT / '{:06d}.jpg\n'.format(img_id)) for img_id in self.train_coco.get_imgs_by_cats(self.cl_states[cur_state]['new_class']['id'])]
+        if self.test_replay:
+            from .CL_replay import read_exemplar
+            lines += [str(IMG_FILE_ROOT / '{:06d}.jpg\n'.format(img_id)) for img_id in read_exemplar()]
+        with open(data_dict['train'], 'w') as f:
+            f.writelines(lines)
+        #if not Path(data_dict['test']).exists():
+        lines = [str(IMG_FILE_ROOT / '{:06d}.jpg\n'.format(img_id)) for img_id in self.test_coco.get_imgs_by_cats(self.cl_states[cur_state]['knowing_class']['id'])]
+        with open(data_dict['test'], 'w') as f:            
+            f.writelines(lines)
         return data_dict
 
     def gen_yolo_lables(self, cur_state:int):
@@ -72,7 +72,7 @@ class CL_manager(object):
 
         # Generate Exemplar lables
         if self.test_replay:
-            from CL_replay import read_exemplar
+            from .CL_replay import read_exemplar
             seen_ids = self.cl_states[cur_state]['knowing_class']['id']
             img_ids = read_exemplar()
             start_idx = 0
