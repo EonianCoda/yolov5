@@ -69,7 +69,7 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
     # Continual learning 
     scenario = opt.scenario
     start_state = opt.start_state
-    cl_manager = CL_manager(scenario)
+    cl_manager = CL_manager(scenario,use_all_label=opt.use_all_label, test_replay=opt.use_replay)
     data_dict = cl_manager.gen_data_dict(start_state)
     cl_manager.gen_yolo_lables(start_state) # generate yolo format lables
 
@@ -254,7 +254,11 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
 
     # Start training
     t0 = time.time()
-    nw = max(round(hyp['warmup_epochs'] * nb), 1000)  # number of warmup iterations, max(3 epochs, 1k iterations)
+
+    if start_state != 0:
+        nw = max(round(hyp['warmup_epochs'] * nb), 100)
+    else:
+        nw = max(round(hyp['warmup_epochs'] * nb), 1000)  # number of warmup iterations, max(3 epochs, 1k iterations)
     # nw = min(nw, (epochs - start_epoch) / 2 * nb)  # limit warmup to < 1/2 of training
     last_opt_step = -1
     maps = np.zeros(nc)  # mAP per class
@@ -471,7 +475,8 @@ def parse_opt(known=False):
     # CL_training 
     parser.add_argument('--start_state', type=int)
     parser.add_argument('--scenario', help='the scenario of states, must be "20", "19 1", "10 10", "15 1", "15 1 1 1 1"', nargs="+", default=[20])
-
+    parser.add_argument('--use_all_label', action='store_true', help='Whether use all label for old target')
+    parser.add_argument('--use_replay', action='store_true', help='Whether use exemplar')
 
     opt = parser.parse_known_args()[0] if known else parser.parse_args()
     return opt

@@ -9,11 +9,12 @@ TEST_DATA = DATA_ROOT / "annotations/voc2007_test.json"
 IMAGE_TXT_ROOT = DATA_ROOT / 'images_paths'
 
 class CL_manager(object):
-    def __init__(self, scenario:list, test_replay=False):
+    def __init__(self, scenario:list, use_all_label=False, test_replay=False):
         self.cl_states = CL_states(TRAIN_DATA, scenario)
         self.train_coco =  Enhance_COCO(TRAIN_DATA)
         self.test_coco = Enhance_COCO(TEST_DATA)
         self.test_replay = test_replay
+        self.use_all_label = use_all_label
 
     def gen_data_dict(self, cur_state:int):
         """generate data dictionary (replace the yaml file, for example: VOC_2007.yaml)
@@ -68,16 +69,24 @@ class CL_manager(object):
         #Training Labels
         target_path = DATA_ROOT / 'labels' #/ 'train'
         #target_path.mkdir(exist_ok=True)
-        if not self.test_replay: 
-            seen_ids = self.cl_states[cur_state]['new_class']['id']
-            img_ids = self.train_coco.get_imgs_by_cats(seen_ids)
-            start_idx = self.cl_states[cur_state]['num_past_class']
-        else:
-            seen_ids = self.cl_states[cur_state]['knowing_class']['id']
+
+        # Generate Exemplar lables
+        if self.test_replay:
             from CL_replay import read_exemplar
-            img_ids = self.train_coco.get_imgs_by_cats(self.cl_states[cur_state]['new_class']['id'])
-            img_ids += read_exemplar()
+            seen_ids = self.cl_states[cur_state]['knowing_class']['id']
+            img_ids = read_exemplar()
             start_idx = 0
+            gen_labels(target_path, img_ids, self.train_coco, seen_ids, start_idx)
+
+        seen_ids = self.cl_states[cur_state]['new_class']['id']
+        img_ids = self.train_coco.get_imgs_by_cats(seen_ids)
+
+        if self.use_all_label:
+            seen_ids = self.cl_states[cur_state]['knowing_class']['id']
+            start_idx = 0
+        else:
+            start_idx = self.cl_states[cur_state]['num_past_class']
+      
         gen_labels(target_path, img_ids, self.train_coco, seen_ids, start_idx)
 
         #Testing Labels
