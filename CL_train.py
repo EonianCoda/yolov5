@@ -57,6 +57,36 @@ RANK = int(os.getenv('RANK', -1))
 WORLD_SIZE = int(os.getenv('WORLD_SIZE', 1))
 
 
+WEIGHT_DIR = Path('./weights')
+DEFAULT_WEIGHT = "yolov5m.pt"
+
+class Distillation_loss:
+    def __init__(self, cl_manager:CL_manager, start_state:int):
+        self.cl_state = cl_manager.cl_states
+        self.cur_state = start_state
+        self.num_old_class = self.cl_state[self.cur_state]['num_past_class']
+
+
+    def next_state(self):
+        self.cur_state += 1
+        self.num_old_class = self.cl_state[self.cur_state]['num_past_class']
+
+    def __call__(self, pred, t_pred): 
+        """Compute the distillation loss for continual learning
+        Args:
+            pred: prediction, list
+            t_predp: teacher's prediction, list
+        """
+        cls_criterion = nn.MSELoss()
+        
+        #total_loss = torch.tensor(0).float().cuda()
+        cls_distill_loss = torch.tensor(0).float().cuda()
+        for p, t_p in zip(pred, t_pred):
+            cls_distill_loss = cls_criterion(p[...,5:self.num_old_class + 5].sigmoid(),t_p[...,5:].sigmoid())
+        cls_distill_loss /= len(pred)
+        return cls_distill_loss
+    
+
 def train(hyp,  # path/to/hyp.yaml or hyp dictionary
           opt,
           device,
@@ -69,10 +99,12 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
     # Continual learning 
     scenario = opt.scenario
     start_state = opt.start_state
+    distill = opt.distill
     cl_manager = CL_manager(scenario,use_all_label=opt.use_all_label, test_replay=opt.use_replay)
     data_dict = cl_manager.gen_data_dict(start_state)
     cl_manager.gen_yolo_lables(start_state) # generate yolo format lables
-
+    if distill:
+        dist_loss = Distillation_loss(cl_manager, start_state)
 
     # Directories
     w = save_dir / 'weights'  # weights dir
@@ -110,20 +142,29 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
     is_coco = False #data.endswith('coco.yaml') and nc == 80  # COCO dataset
 
     # Model
-    check_suffix(weights, '.pt')  # check weights
-    pretrained = weights.endswith('.pt')
-    if pretrained:
-        with torch_distributed_zero_first(RANK):
-            weights = attempt_download(weights)  # download if not found locally
-        ckpt = torch.load(weights, map_location=device)  # load checkpoint
-        model = Model(cfg or ckpt['model'].yaml, ch=3, nc=nc, anchors=hyp.get('anchors')).to(device)  # create
-        exclude = ['anchor'] if (cfg or hyp.get('anchors')) and not resume else []  # exclude keys
-        csd = ckpt['model'].float().state_dict()  # checkpoint state_dict as FP32
-        csd = intersect_dicts(csd, model.state_dict(), exclude=exclude)  # intersect
-        model.load_state_dict(csd, strict=False)  # load
-        LOGGER.info(f'Transferred {len(csd)}/{len(model.state_dict())} items from {weights}')  # report
-    else:
-        model = Model(cfg, ch=3, nc=nc, anchors=hyp.get('anchors')).to(device)  # create
+    if start_state == 0: #non-continual state
+        weights = WEIGHT_DIR / DEFAULT_WEIGHT 
+    else: #continual state
+        scenario_name = "_".join(cl_manager.cl_states.scenario.split('+'))
+        weights = scenario_name + f"_{start_state}.pt"
+        weights = WEIGHT_DIR / weights
+
+    ckpt = torch.load(weights, map_location=device)  # load checkpoint
+    model = Model(ckpt['model'].yaml, ch=3, nc=nc, anchors=hyp.get('anchors')).to(device)  # create
+    exclude = ['anchor'] if (cfg or hyp.get('anchors')) and not resume else []  # exclude keys
+    csd = ckpt['model'].float().state_dict()  # checkpoint state_dict as FP32
+    csd = intersect_dicts(csd, model.state_dict(), exclude=exclude)  # intersect
+    model.load_state_dict(csd, strict=False)  # load
+    LOGGER.info(f'Transferred {len(csd)}/{len(model.state_dict())} items from {weights}')  # report
+
+    # add distillation loss
+    if distill:
+        import copy
+        teacher_model = copy.deepcopy(model)
+
+    # Expand Class
+    if start_state > 1:
+        model.expand_classes(cl_manager.cl_states[start_state]['num_new_class'])
 
     # Freeze
     freeze = [f'model.{x}.' for x in range(freeze)]  # layers to freeze
@@ -169,28 +210,8 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
     # EMA
     ema = ModelEMA(model) if RANK in [-1, 0] else None
 
-    # Resume
     start_epoch, best_fitness = 0, 0.0
-    if pretrained:
-        # Optimizer
-        if ckpt['optimizer'] is not None:
-            optimizer.load_state_dict(ckpt['optimizer'])
-            best_fitness = ckpt['best_fitness']
-
-        # EMA
-        if ema and ckpt.get('ema'):
-            ema.ema.load_state_dict(ckpt['ema'].float().state_dict())
-            ema.updates = ckpt['updates']
-
-        # Epochs
-        start_epoch = ckpt['epoch'] + 1
-        if resume:
-            assert start_epoch > 0, f'{weights} training to {epochs} epochs is finished, nothing to resume.'
-        if epochs < start_epoch:
-            LOGGER.info(f"{weights} has been trained for {ckpt['epoch']} epochs. Fine-tuning for {epochs} more epochs.")
-            epochs += ckpt['epoch']  # finetune additional epochs
-
-        del ckpt, csd
+    
 
     # Image sizes
     gs = max(int(model.stride.max()), 32)  # grid size (max stride)
@@ -315,10 +336,17 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
                     ns = [math.ceil(x * sf / gs) * gs for x in imgs.shape[2:]]  # new shape (stretched to gs-multiple)
                     imgs = nn.functional.interpolate(imgs, size=ns, mode='bilinear', align_corners=False)
 
+            # Teacher model
+            if distill:
+                with torch.no_grad():
+                    teacher_pred = teacher_model(imgs)
             # Forward
             with amp.autocast(enabled=cuda):
                 pred = model(imgs)  # forward
                 loss, loss_items = compute_loss(pred, targets.to(device))  # loss scaled by batch_size
+                if distill:
+                    distillation_loss = dist_loss(pred, teacher_pred)
+                    print(float(distillation_loss))
                 if RANK != -1:
                     loss *= WORLD_SIZE  # gradient averaged between devices in DDP mode
                 if opt.quad:
@@ -438,7 +466,6 @@ def parse_opt(known=False):
     parser = argparse.ArgumentParser()
     parser.add_argument('--weights', type=str, default='yolov5s.pt', help='initial weights path')
     parser.add_argument('--cfg', type=str, default='', help='model.yaml path')
-    
     parser.add_argument('--hyp', type=str, default='data/hyps/hyp.scratch.yaml', help='hyperparameters path')
     parser.add_argument('--epochs', type=int, default=300)
     parser.add_argument('--batch-size', type=int, default=16, help='total batch size for all GPUs')
@@ -477,6 +504,7 @@ def parse_opt(known=False):
     parser.add_argument('--scenario', help='the scenario of states, must be "20", "19 1", "10 10", "15 1", "15 1 1 1 1"', nargs="+", default=[20])
     parser.add_argument('--use_all_label', action='store_true', help='Whether use all label for old target')
     parser.add_argument('--use_replay', action='store_true', help='Whether use exemplar')
+    parser.add_argument('--distill', action='store_true', help='Whether add distillation loss')
 
     opt = parser.parse_known_args()[0] if known else parser.parse_args()
     return opt

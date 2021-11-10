@@ -254,11 +254,14 @@ class Model(nn.Module):
     def info(self, verbose=False, img_size=640):  # print model information
         model_info(self, verbose, img_size)
 
-    def expand_classes(self, num_new_classes:int, new_class_name:list):
+    def expand_classes(self, num_new_classes:int, new_class_name=None):
         m = self.model[-1]  # Detect() module
         m.expand_classes(num_new_classes)
         self.yaml['nc'] = self.yaml['nc'] + num_new_classes
-        self.names.extend(new_class_name)
+        if new_class_name == None:
+            self.names.extend([i + len(self.names) for i in range(num_new_classes)])
+        else:
+            self.names.extend(new_class_name)
 
 
 def parse_model(d, ch):  # model_dict, input_channels(3)
