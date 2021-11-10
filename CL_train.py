@@ -143,14 +143,16 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
 
     # Model
     if start_state == 0: #non-continual state
-        weights = WEIGHT_DIR / DEFAULT_WEIGHT 
+        weights = WEIGHT_DIR / DEFAULT_WEIGHT
+        temp_nc = nc
     else: #continual state
         scenario_name = "_".join(cl_manager.cl_states.scenario.split('+'))
         weights = scenario_name + f"_{start_state}.pt"
         weights = WEIGHT_DIR / weights
+        temp_nc = cl_manager.cl_states[start_state]['num_past_class']
 
     ckpt = torch.load(weights, map_location=device)  # load checkpoint
-    model = Model(ckpt['model'].yaml, ch=3, nc=nc, anchors=hyp.get('anchors')).to(device)  # create
+    model = Model(ckpt['model'].yaml, ch=3, nc=temp_nc, anchors=hyp.get('anchors')).to(device)  # create
     exclude = ['anchor'] if (cfg or hyp.get('anchors')) and not resume else []  # exclude keys
     csd = ckpt['model'].float().state_dict()  # checkpoint state_dict as FP32
     csd = intersect_dicts(csd, model.state_dict(), exclude=exclude)  # intersect
