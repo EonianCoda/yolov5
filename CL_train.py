@@ -61,11 +61,11 @@ WEIGHT_DIR = Path('./weights')
 DEFAULT_WEIGHT = "yolov5m.pt"
 
 class Distillation_loss:
-    def __init__(self, cl_manager:CL_manager, start_state:int):
+    def __init__(self, cl_manager:CL_manager, start_state:int, threshold=0.5):
         self.cl_state = cl_manager.cl_states
         self.cur_state = start_state
         self.num_old_class = self.cl_state[self.cur_state]['num_past_class']
-
+        self.threshold = threshold
 
     def next_state(self):
         self.cur_state += 1
@@ -82,7 +82,10 @@ class Distillation_loss:
         #total_loss = torch.tensor(0).float().cuda()
         cls_distill_loss = torch.tensor(0).float().cuda()
         for p, t_p in zip(pred, t_pred):
-            cls_distill_loss = cls_criterion(p[...,5:self.num_old_class + 5].sigmoid(),t_p[...,5:].sigmoid())
+            prob = p[...,5:self.num_old_class + 5].sigmoid()
+            t_prob = t_p[...,5:].sigmoid()
+            mask = t_prob > self.threshold
+            cls_distill_loss = cls_criterion(prob[mask],t_prob[mask])
         cls_distill_loss /= len(pred)
         return cls_distill_loss
     
@@ -104,7 +107,7 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
     data_dict = cl_manager.gen_data_dict(start_state)
     cl_manager.gen_yolo_lables(start_state) # generate yolo format lables
     if distill:
-        dist_loss = Distillation_loss(cl_manager, start_state)
+        dist_loss = Distillation_loss(cl_manager, start_state, opt.distill_threshold)
 
     # Directories
     w = save_dir / 'weights'  # weights dir
@@ -165,7 +168,7 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
         teacher_model = copy.deepcopy(model)
 
     # Expand Class
-    if start_state > 1:
+    if start_state >= 1:
         model.expand_classes(cl_manager.cl_states[start_state]['num_new_class'])
 
     # Freeze
@@ -348,7 +351,8 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
                 loss, loss_items = compute_loss(pred, targets.to(device))  # loss scaled by batch_size
                 if distill:
                     distillation_loss = dist_loss(pred, teacher_pred)
-                    print(float(distillation_loss))
+                    loss += distillation_loss
+                    print(":{.5f}".format(float(distillation_loss)))
                 if RANK != -1:
                     loss *= WORLD_SIZE  # gradient averaged between devices in DDP mode
                 if opt.quad:
@@ -507,6 +511,7 @@ def parse_opt(known=False):
     parser.add_argument('--use_all_label', action='store_true', help='Whether use all label for old target')
     parser.add_argument('--use_replay', action='store_true', help='Whether use exemplar')
     parser.add_argument('--distill', action='store_true', help='Whether add distillation loss')
+    parser.add_argument('--distill_threshold', type=float, default=0.5, help='the thresold for distill')
 
     opt = parser.parse_known_args()[0] if known else parser.parse_args()
     return opt

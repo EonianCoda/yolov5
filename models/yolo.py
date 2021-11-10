@@ -101,6 +101,7 @@ class Detect(nn.Module):
         
         self.nc = new_nc
         self.no = new_no
+        new_head.cuda()
         self.m = new_head
         del old_head
 
