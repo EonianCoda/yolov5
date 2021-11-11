@@ -78,16 +78,41 @@ class Distillation_loss:
             t_predp: teacher's prediction, list
         """
         cls_criterion = nn.MSELoss()
+        obj_criterion = nn.MSELoss()
+        reg_criterion = nn.MSELoss()
         
-        #total_loss = torch.tensor(0).float().cuda()
-        cls_distill_loss = torch.tensor(0).float().cuda()
+        batch_size = pred[0].shape[0]
+
+        cls_dist_loss = torch.tensor(0).float().cuda()
+        obj_dist_loss = torch.tensor(0).float().cuda()
+        reg_dist_loss = torch.tensor(0).float().cuda()
         for p, t_p in zip(pred, t_pred):
-            prob = p[...,5:self.num_old_class + 5].sigmoid()
-            t_prob = t_p[...,5:].sigmoid()
-            mask = t_prob > self.threshold
-            cls_distill_loss = cls_criterion(prob[mask],t_prob[mask])
-        cls_distill_loss /= len(pred)
-        return cls_distill_loss
+            prob = p.sigmoid()
+            t_prob = t_p.sigmoid()
+            # probability for current model
+            reg_prob = prob[...,:4]
+            obj_prob = prob[...,4]
+            cls_prob = prob[...,5:self.num_old_class + 5]
+            # probability for teacher(frozen) model
+            reg_t_prob = t_prob[...,:4]
+            obj_t_prob = t_prob[...,4]
+            cls_t_prob = t_prob[...,5:]
+
+            # Classification
+            cls_mask = cls_t_prob > self.threshold
+            cls_dist_loss += cls_criterion(cls_prob[cls_mask], cls_t_prob[cls_mask])
+            # Objectness
+            obj_mask = obj_t_prob > self.threshold
+            obj_dist_loss += obj_criterion(obj_prob[obj_mask], obj_t_prob[obj_mask])
+            # Regression
+            reg_mask = obj_mask.any(dim=-1)
+            reg_dist_loss += reg_criterion(reg_prob[reg_mask], reg_t_prob[reg_mask])
+
+        cls_dist_loss /= batch_size
+        obj_dist_loss /= batch_size
+        reg_dist_loss /= batch_size
+
+        return (cls_dist_loss + obj_dist_loss + reg_dist_loss), torch.cat((cls_dist_loss, obj_dist_loss, reg_dist_loss)).detach()
     
 
 def train(hyp,  # path/to/hyp.yaml or hyp dictionary
@@ -352,7 +377,7 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
                 if distill:
                     distillation_loss = dist_loss(pred, teacher_pred)
                     loss += distillation_loss
-                    print(":{.5f}".format(float(distillation_loss)))
+                    print("{:.5f}".format(float(distillation_loss)))
                 if RANK != -1:
                     loss *= WORLD_SIZE  # gradient averaged between devices in DDP mode
                 if opt.quad:
@@ -400,7 +425,8 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
                                            verbose=nc < 50 and final_epoch,
                                            plots=plots and final_epoch,
                                            callbacks=callbacks,
-                                           compute_loss=compute_loss)
+                                           compute_loss=compute_loss,
+                                           name=opt.name)
 
             # Update best mAP
             fi = fitness(np.array(results).reshape(1, -1))  # weighted combination of [P, R, mAP@.5, mAP@.5-.95]

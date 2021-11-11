@@ -247,9 +247,10 @@ def run(data,
             print(pf % (names[c], seen, nt[c], p[i], r[i], ap50[i], ap[i]))
 
     # save results per class
+    
     describ = 'Class,Precision,Recall,AP@0.5,AP@0.5:0.95\n'
     pf = '%s'+ ',%.3g' * 4 + '\n' #print format
-    lines = [describ, pf % ('all', mp, mr, map50, map)]
+    lines = [f"{name}\n",describ, pf % ('all', mp, mr, map50, map)]
     for i, c in enumerate(ap_class):
         lines.append(pf % (names[c], p[i], r[i], ap50[i], ap[i]))
     with open(save_dir / 'val_results.csv', 'w') as f:
