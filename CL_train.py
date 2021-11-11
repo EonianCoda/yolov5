@@ -5,8 +5,6 @@ Train a YOLOv5 model on a custom dataset
 Usage:
     $ python path/to/train.py --data coco128.yaml --weights yolov5s.pt --img 640
 """
-
-from _typeshed import Self
 import argparse
 import logging
 import math
@@ -123,8 +121,14 @@ class ModelWarmer:
         self.warm_epochs = [int(warm_epochs[0]), int(warm_epochs[0]) + int(warm_epochs[1])]
         self.cur_stage = 0
     def warm(self, epoch:int):
+        if self.cur_stage == 2:
+            return
         if epoch >= self.freeze_layers[self.cur_stage]:
             self.cur_stage += 1
+            if self.cur_stage == 2:
+                for k, v in self.model.named_parameters():
+                    v.requires_grad = True
+                return 
         self._freeze(self.cur_stage)
     def _freeze(self, stage:int):
         # Freeze
