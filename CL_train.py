@@ -60,7 +60,7 @@ WORLD_SIZE = int(os.getenv('WORLD_SIZE', 1))
 WEIGHT_DIR = Path('./weights')
 DEFAULT_WEIGHT = "yolov5m.pt"
 
-class Distillation_loss:
+class Compute_dist_loss:
     def __init__(self, cl_manager:CL_manager, start_state:int, threshold=0.5):
         self.cl_state = cl_manager.cl_states
         self.cur_state = start_state
@@ -112,7 +112,7 @@ class Distillation_loss:
         obj_dist_loss /= batch_size
         reg_dist_loss /= batch_size
 
-        return (cls_dist_loss + obj_dist_loss + reg_dist_loss), torch.cat((cls_dist_loss, obj_dist_loss, reg_dist_loss)).detach()
+        return (cls_dist_loss + obj_dist_loss + reg_dist_loss), torch.stack(cls_dist_loss, obj_dist_loss, reg_dist_loss).detach()
     
 
 def train(hyp,  # path/to/hyp.yaml or hyp dictionary
@@ -132,7 +132,7 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
     data_dict = cl_manager.gen_data_dict(start_state)
     cl_manager.gen_yolo_lables(start_state) # generate yolo format lables
     if distill:
-        dist_loss = Distillation_loss(cl_manager, start_state, opt.distill_threshold)
+        compute_dist_loss = Compute_dist_loss(cl_manager, start_state, opt.distill_threshold)
 
     # Directories
     w = save_dir / 'weights'  # weights dir
@@ -375,9 +375,9 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
                 pred = model(imgs)  # forward
                 loss, loss_items = compute_loss(pred, targets.to(device))  # loss scaled by batch_size
                 if distill:
-                    distillation_loss = dist_loss(pred, teacher_pred)
-                    loss += distillation_loss
-                    print("{:.5f}".format(float(distillation_loss)))
+                    dist_loss, dist_loss_items = compute_dist_loss(pred, teacher_pred)
+                    loss += dist_loss
+                    #print("{:.5f}".format(float(Compute_dist_loss)))
                 if RANK != -1:
                     loss *= WORLD_SIZE  # gradient averaged between devices in DDP mode
                 if opt.quad:
