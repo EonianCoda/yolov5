@@ -6,6 +6,7 @@ Usage:
     $ python path/to/train.py --data coco128.yaml --weights yolov5s.pt --img 640
 """
 
+from _typeshed import Self
 import argparse
 import logging
 import math
@@ -112,8 +113,27 @@ class Compute_dist_loss:
         obj_dist_loss /= batch_size
         reg_dist_loss /= batch_size
 
-        return (cls_dist_loss + obj_dist_loss + reg_dist_loss), torch.stack(cls_dist_loss, obj_dist_loss, reg_dist_loss).detach()
-    
+        return (cls_dist_loss + obj_dist_loss + reg_dist_loss), torch.stack([cls_dist_loss, obj_dist_loss, reg_dist_loss]).detach()
+
+class ModelWarmer:
+    def __init__(self, model, warm_epochs:list):
+        self.model = model
+        self.freeze_layers = [24,10]
+
+        self.warm_epochs = [int(warm_epochs[0]), int(warm_epochs[0]) + int(warm_epochs[1])]
+        self.cur_stage = 0
+    def warm(self, epoch:int):
+        if epoch >= self.freeze_layers[self.cur_stage]:
+            self.cur_stage += 1
+        self._freeze(self.cur_stage)
+    def _freeze(self, stage:int):
+        # Freeze
+        freeze = [f'model.{x}.' for x in range(self.freeze_layers[stage])]  # layers to freeze
+        for k, v in self.model.named_parameters():
+            v.requires_grad = True  # train all layers
+            if any(x in k for x in freeze):
+                print(f'freezing {k}')
+                v.requires_grad = False
 
 def train(hyp,  # path/to/hyp.yaml or hyp dictionary
           opt,
@@ -128,6 +148,7 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
     scenario = opt.scenario
     start_state = opt.start_state
     distill = opt.distill
+    warm_up = opt.warm_up
     cl_manager = CL_manager(scenario,use_all_label=opt.use_all_label, test_replay=opt.use_replay)
     data_dict = cl_manager.gen_data_dict(start_state)
     cl_manager.gen_yolo_lables(start_state) # generate yolo format lables
@@ -196,6 +217,7 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
     if start_state >= 1:
         model.expand_classes(cl_manager.cl_states[start_state]['num_new_class'])
 
+    
     # Freeze
     freeze = [f'model.{x}.' for x in range(freeze)]  # layers to freeze
     for k, v in model.named_parameters():
@@ -203,7 +225,8 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
         if any(x in k for x in freeze):
             print(f'freezing {k}')
             v.requires_grad = False
-
+    if warm_up:
+        modelWarmer = ModelWarmer(model, opt.warm_epochs)
     # Optimizer
     nbs = 64  # nominal batch size
     accumulate = max(round(nbs / batch_size), 1)  # accumulate loss before optimizing
@@ -324,7 +347,9 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
                 f'Starting training for {epochs} epochs...')
     for epoch in range(start_epoch, epochs):  # epoch ------------------------------------------------------------------
         model.train()
-
+        # Warm up
+        if warm_up:
+            modelWarmer.warm(epoch)
         # Update image weights (optional, single-GPU only)
         if opt.image_weights:
             cw = model.class_weights.cpu().numpy() * (1 - maps) ** 2 / nc  # class weights
@@ -538,6 +563,8 @@ def parse_opt(known=False):
     parser.add_argument('--use_replay', action='store_true', help='Whether use exemplar')
     parser.add_argument('--distill', action='store_true', help='Whether add distillation loss')
     parser.add_argument('--distill_threshold', type=float, default=0.5, help='the thresold for distill')
+    parser.add_argument('--warm_up', action='store_true', help='Whether warm up')
+    parser.add_argument('--warm_epochs', nargs="+", default=[])
 
     opt = parser.parse_known_args()[0] if known else parser.parse_args()
     return opt
@@ -676,6 +703,14 @@ def main(opt, callbacks=Callbacks()):
 def run(**kwargs):
     # Usage: import train; train.run(data='coco128.yaml', imgsz=320, weights='yolov5m.pt')
     opt = parse_opt(True)
+
+    
+    root_path = Path("runs")
+    scenario_dir = "_".join(opt.scenario)
+    state_dir = f"state{opt.start_state}"
+    (root_path / scenario_dir).mkdir(exist_ok=True)
+    (root_path / scenario_dir / state_dir).mkdir(exist_ok=True)
+    opt.project = root_path / scenario_dir / state_dir # set directory
     for k, v in kwargs.items():
         setattr(opt, k, v)
     main(opt)
