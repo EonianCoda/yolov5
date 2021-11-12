@@ -107,9 +107,9 @@ class Compute_dist_loss:
             reg_mask = obj_mask.any(dim=-1)
             reg_dist_loss += reg_criterion(reg_prob[reg_mask], reg_t_prob[reg_mask])
 
-        cls_dist_loss /= batch_size
-        obj_dist_loss /= batch_size
-        reg_dist_loss /= batch_size
+        # cls_dist_loss /= batch_size
+        # obj_dist_loss /= batch_size
+        # reg_dist_loss /= batch_size
 
         return (cls_dist_loss + obj_dist_loss + reg_dist_loss), torch.stack([cls_dist_loss, obj_dist_loss, reg_dist_loss]).detach()
 
@@ -122,7 +122,7 @@ class ModelWarmer:
         self.cur_stage = 0
     def warm(self, epoch:int):
         if self.cur_stage == 2:
-            return
+            return  
         if epoch >= self.freeze_layers[self.cur_stage]:
             self.cur_stage += 1
             if self.cur_stage == 2:
@@ -136,7 +136,6 @@ class ModelWarmer:
         for k, v in self.model.named_parameters():
             v.requires_grad = True  # train all layers
             if any(x in k for x in freeze):
-                print(f'freezing {k}')
                 v.requires_grad = False
 
 def train(hyp,  # path/to/hyp.yaml or hyp dictionary
@@ -575,6 +574,13 @@ def parse_opt(known=False):
 
 
 def main(opt, callbacks=Callbacks()):
+    root_path = Path("runs")
+    scenario_dir = "_".join(opt.scenario)
+    state_dir = f"state{opt.start_state}"
+    (root_path / scenario_dir).mkdir(exist_ok=True)
+    (root_path / scenario_dir / state_dir).mkdir(exist_ok=True)
+    opt.project = root_path / scenario_dir / state_dir # set directory
+
     # Checks
     set_logging(RANK)
     if RANK in [-1, 0]:
@@ -707,14 +713,6 @@ def main(opt, callbacks=Callbacks()):
 def run(**kwargs):
     # Usage: import train; train.run(data='coco128.yaml', imgsz=320, weights='yolov5m.pt')
     opt = parse_opt(True)
-
-    
-    root_path = Path("runs")
-    scenario_dir = "_".join(opt.scenario)
-    state_dir = f"state{opt.start_state}"
-    (root_path / scenario_dir).mkdir(exist_ok=True)
-    (root_path / scenario_dir / state_dir).mkdir(exist_ok=True)
-    opt.project = root_path / scenario_dir / state_dir # set directory
     for k, v in kwargs.items():
         setattr(opt, k, v)
     main(opt)
