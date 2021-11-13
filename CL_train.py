@@ -113,23 +113,27 @@ class Compute_dist_loss:
 
         return (cls_dist_loss + obj_dist_loss + reg_dist_loss), torch.stack([cls_dist_loss, obj_dist_loss, reg_dist_loss]).detach()
 
+
 class ModelWarmer:
     def __init__(self, model, warm_epochs:list):
         self.model = model
         self.freeze_layers = [24,10]
-
         self.warm_epochs = [int(warm_epochs[0]), int(warm_epochs[0]) + int(warm_epochs[1])]
         self.cur_stage = 0
+        self.max_stage = len(self.freeze_layers)
     def warm(self, epoch:int):
-        if self.cur_stage == 2:
-            return  
+        if self.cur_stage == self.max_stage:
+            return
         if epoch >= self.freeze_layers[self.cur_stage]:
             self.cur_stage += 1
-            if self.cur_stage == 2:
-                for k, v in self.model.named_parameters():
-                    v.requires_grad = True
-                return 
+            if self.cur_stage == self.max_stage:
+                self._unfreeze_all()
+                return
         self._freeze(self.cur_stage)
+
+    def _unfreeze_all(self):
+        for k, v in self.model.named_parameters():
+            v.requires_grad = True
     def _freeze(self, stage:int):
         # Freeze
         freeze = [f'model.{x}.' for x in range(self.freeze_layers[stage])]  # layers to freeze
