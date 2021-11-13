@@ -157,7 +157,12 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
     cl_manager.gen_yolo_lables(start_state) # generate yolo format lables
     if distill:
         compute_dist_loss = Compute_dist_loss(cl_manager, start_state, opt.distill_threshold)
-
+    
+    val_results = {'names':cl_manager.cl_states[start_state]['knowing_class']['name'],
+                    'precision':[], 
+                    'recall':[],
+                    'ap50':[],
+                    'ap5095':[]}
     # Directories
     w = save_dir / 'weights'  # weights dir
     w.mkdir(parents=True, exist_ok=True)  # make dir
@@ -333,7 +338,7 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
     t0 = time.time()
 
     if start_state != 0:
-        nw = max(round(hyp['warmup_epochs'] * nb), 100)
+        nw = max(round(hyp['warmup_epochs'] * nb), opt.nw)
     else:
         nw = max(round(hyp['warmup_epochs'] * nb), 1000)  # number of warmup iterations, max(3 epochs, 1k iterations)
     # nw = min(nw, (epochs - start_epoch) / 2 * nb)  # limit warmup to < 1/2 of training
@@ -441,7 +446,7 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
             callbacks.run('on_train_epoch_end', epoch=epoch)
             ema.update_attr(model, include=['yaml', 'nc', 'hyp', 'names', 'stride', 'class_weights'])
             final_epoch = (epoch + 1 == epochs) or stopper.possible_stop
-            if not noval or final_epoch:  # Calculate mAP
+            if (not noval and (epoch % opt.val_interval == 0)) or final_epoch:  # Calculate mAP
                 results, maps, _ = val.run(data_dict,
                                            batch_size=batch_size // WORLD_SIZE * 2,
                                            imgsz=imgsz,
@@ -559,7 +564,10 @@ def parse_opt(known=False):
     parser.add_argument('--local_rank', type=int, default=-1, help='DDP parameter, do not modify')
     parser.add_argument('--freeze', type=int, default=0, help='Number of layers to freeze. backbone=10, all=24')
     parser.add_argument('--patience', type=int, default=100, help='EarlyStopping patience (epochs without improvement)')
-    # CL_training 
+    # Convenient args
+    parser.add_argument('--nw', type=int, default=10, help='number of mininum learning rate warm up')
+    parser.add_argument('--val_interval', type=int, default=1, help='if doing validation, then validation in every "val_interval" number epoch')
+    # CL_training
     parser.add_argument('--start_state', type=int)
     parser.add_argument('--scenario', help='the scenario of states, must be "20", "19 1", "10 10", "15 1", "15 1 1 1 1"', nargs="+", default=[20])
     parser.add_argument('--use_all_label', action='store_true', help='Whether use all label for old target')
@@ -579,7 +587,7 @@ def main(opt, callbacks=Callbacks()):
     state_dir = f"state{opt.start_state}"
     (root_path / scenario_dir).mkdir(exist_ok=True)
     (root_path / scenario_dir / state_dir).mkdir(exist_ok=True)
-    opt.project = root_path / scenario_dir / state_dir # set directory
+    opt.project = str(root_path / scenario_dir / state_dir) # set directory
 
     # Checks
     set_logging(RANK)
