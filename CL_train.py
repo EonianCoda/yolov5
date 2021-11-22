@@ -70,7 +70,7 @@ class Compute_dist_loss:
         self.cur_state += 1
         self.num_old_class = self.cl_state[self.cur_state]['num_past_class']
 
-    def __call__(self, pred, t_pred): 
+    def __call__(self, pred, t_pred, feats, t_feats): 
         """Compute the distillation loss for continual learning
         Args:
             pred: prediction, list
@@ -79,12 +79,21 @@ class Compute_dist_loss:
         cls_criterion = nn.MSELoss()
         obj_criterion = nn.MSELoss()
         reg_criterion = nn.MSELoss()
-        
+        feat_criterion = nn.CosineEmbeddingLoss()
         batch_size = pred[0].shape[0]
 
-        cls_dist_loss = torch.tensor(0).float().cuda()
-        obj_dist_loss = torch.tensor(0).float().cuda()
-        reg_dist_loss = torch.tensor(0).float().cuda()
+        dist_cls_loss = torch.tensor(0).float().cuda()
+        dist_obj_loss = torch.tensor(0).float().cuda()
+        dist_reg_loss = torch.tensor(0).float().cuda()
+        dist_feat_loss = torch.tensor(0).float().cuda()
+
+        b, c, w, h  = feats[0].shape # batch_size, channel(anchor * (number_class + 5)), width, height
+        for f, t_f in zip(feats, t_feats):
+            num_target = b * w * h
+            dist_feat_loss += feat_criterion(f.permute(0, 2, 3, 1).contiguous().view(-1, c),
+                                            t_f.permute(0, 2, 3, 1).contiguous().view(-1, c),
+                                            torch.ones(num_target, device=torch.device('cuda:0')))
+
         for p, t_p in zip(pred, t_pred):
             prob = p.sigmoid()
             t_prob = t_p.sigmoid()
@@ -99,19 +108,19 @@ class Compute_dist_loss:
 
             # Classification
             cls_mask = cls_t_prob > self.threshold
-            cls_dist_loss += cls_criterion(cls_prob[cls_mask], cls_t_prob[cls_mask])
+            dist_cls_loss += cls_criterion(cls_prob[cls_mask], cls_t_prob[cls_mask])
             # Objectness
             obj_mask = obj_t_prob > self.threshold
-            obj_dist_loss += obj_criterion(obj_prob[obj_mask], obj_t_prob[obj_mask])
+            dist_obj_loss += obj_criterion(obj_prob[obj_mask], obj_t_prob[obj_mask])
             # Regression
             reg_mask = obj_mask.any(dim=-1)
-            reg_dist_loss += reg_criterion(reg_prob[reg_mask], reg_t_prob[reg_mask])
+            dist_reg_loss += reg_criterion(reg_prob[reg_mask], reg_t_prob[reg_mask])
 
-        # cls_dist_loss /= batch_size
-        # obj_dist_loss /= batch_size
-        # reg_dist_loss /= batch_size
+        # dist_cls_loss /= batch_size
+        # dist_obj_loss /= batch_size
+        # dist_reg_loss /= batch_size
 
-        return (cls_dist_loss + obj_dist_loss + reg_dist_loss), torch.stack([cls_dist_loss, obj_dist_loss, reg_dist_loss]).detach()
+        return (dist_cls_loss + dist_obj_loss + dist_reg_loss + dist_feat_loss), torch.stack([dist_cls_loss, dist_obj_loss, dist_reg_loss, dist_feat_loss]).detach()
 
 
 class ModelWarmer:
@@ -406,15 +415,19 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
             # Teacher model
             if distill:
                 with torch.no_grad():
-                    teacher_pred = teacher_model(imgs)
+                    teacher_pred, teacher_feats = teacher_model.forward_feat(imgs)
+                    teacher_feats = [teacher_feats[i] for i in [17, 20, 23]]
+
             # Forward
             with amp.autocast(enabled=cuda):
-                pred = model(imgs)  # forward
-                loss, loss_items = compute_loss(pred, targets.to(device))  # loss scaled by batch_size
                 if distill:
-                    dist_loss, dist_loss_items = compute_dist_loss(pred, teacher_pred)
+                    pred, feats = model.forward_feat(imgs)  # forward
+                    feats = [feats[i] for i in [17, 20, 23]]
+                    dist_loss, dist_loss_items = compute_dist_loss(pred, teacher_pred, feats, teacher_feats)
                     loss += dist_loss
-                    #print("{:.5f}".format(float(Compute_dist_loss)))
+                else:
+                    pred = model(imgs)  # forward
+                    loss, loss_items = compute_loss(pred, targets.to(device))  # loss scaled by batch_size
                 if RANK != -1:
                     loss *= WORLD_SIZE  # gradient averaged between devices in DDP mode
                 if opt.quad:

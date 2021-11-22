@@ -231,6 +231,32 @@ class Model(nn.Module):
             LOGGER.info(
                 ('%6g Conv2d.bias:' + '%10.3g' * 6) % (mi.weight.shape[1], *b[:5].mean(1).tolist(), b[5:].mean()))
 
+    def forward_feat(self, x, profile=False, visualize=False):
+        y, dt = [], []  # outputs
+        for m in self.model:
+            if m.f != -1:  # if not from previous layer
+                x = y[m.f] if isinstance(m.f, int) else [x if j == -1 else y[j] for j in m.f]  # from earlier layers
+
+            if profile:
+                c = isinstance(m, Detect)  # copy input as inplace fix
+                o = thop.profile(m, inputs=(x.copy() if c else x,), verbose=False)[0] / 1E9 * 2 if thop else 0  # FLOPs
+                t = time_sync()
+                for _ in range(10):
+                    m(x.copy() if c else x)
+                dt.append((time_sync() - t) * 100)
+                if m == self.model[0]:
+                    LOGGER.info(f"{'time (ms)':>10s} {'GFLOPs':>10s} {'params':>10s}  {'module'}")
+                LOGGER.info(f'{dt[-1]:10.2f} {o:10.2f} {m.np:10.0f}  {m.type}')
+
+            x = m(x)  # run
+            y.append(x if m.i in self.save else None)  # save output
+
+            if visualize:
+                feature_visualization(x, m.type, m.i, save_dir=visualize)
+
+        if profile:
+            LOGGER.info('%.1fms total' % sum(dt))
+        return x, y
     # def _print_weights(self):
     #     for m in self.model.modules():
     #         if type(m) is Bottleneck:
