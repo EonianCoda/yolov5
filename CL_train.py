@@ -423,6 +423,7 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
             with amp.autocast(enabled=cuda):
                 if distill:
                     pred, feats = model.forward_feat(imgs)  # forward
+                    loss, loss_items = compute_loss(pred, targets.to(device))  # loss scaled by batch_size
                     feats = [feats[i] for i in [17, 20, 23]]
                     dist_loss, dist_loss_items = compute_dist_loss(pred, teacher_pred, feats, teacher_feats)
                     loss += dist_loss
