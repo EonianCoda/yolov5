@@ -124,7 +124,7 @@ class ModelWarmer:
     def warm(self, epoch:int):
         if self.cur_stage == self.max_stage:
             return
-        if epoch >= self.freeze_layers[self.cur_stage]:
+        if epoch >= self.warm_epochs[self.cur_stage]:
             self.cur_stage += 1
             if self.cur_stage == self.max_stage:
                 self._unfreeze_all()
