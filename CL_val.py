@@ -261,8 +261,18 @@ def run(scenario,
     lines = [describ, pf % ('all', mp, mr, map50, map)]
     for i, c in enumerate(ap_class):
         lines.append(pf % (names[c], p[i], r[i], ap50[i], ap[i]))
+    # upperbound for training all
+    import pickle
+    lines.append('Compare with upperbound\n')
+    with open("./runs/upperbound.pickle", 'rb') as f:
+        upperbound = pickle.load(f)
+    for i, c in enumerate(ap_class):
+        precision, recall, avp50, avp5095 = upperbound[names[c]]
+        lines.append(pf % (names[c], precision - p[i], recall - r[i], avp50 - ap50[i], avp5095 - ap[i]))
+    
     with open(save_dir / 'val_results.csv', 'w') as f:
         f.writelines(lines)
+
 
 
     # Print speeds
@@ -311,6 +321,7 @@ def run(scenario,
     for i, c in enumerate(ap_class):
         maps[c] = ap[i]
     return (mp, mr, map50, map, *(loss.cpu() / len(dataloader)).tolist()), maps, t
+
 
 
 def parse_opt():

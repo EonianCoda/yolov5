@@ -256,6 +256,7 @@ def run(data,
     
     # upperbound for training all
     import pickle
+    lines.append('Compare with upperbound\n')
     with open("./runs/upperbound.pickle", 'rb') as f:
         upperbound = pickle.load(f)
     for i, c in enumerate(ap_class):
