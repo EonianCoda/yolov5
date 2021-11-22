@@ -87,8 +87,9 @@ class Compute_dist_loss:
         dist_reg_loss = torch.tensor(0).float().cuda()
         dist_feat_loss = torch.tensor(0).float().cuda()
 
-        b, c, w, h  = feats[0].shape # batch_size, channel(anchor * (number_class + 5)), width, height
+        
         for f, t_f in zip(feats, t_feats):
+            b, c, w, h  = f.shape # batch_size, channel(anchor * (number_class + 5)), width, height
             num_target = b * w * h
             dist_feat_loss += feat_criterion(f.permute(0, 2, 3, 1).contiguous().view(-1, c),
                                             t_f.permute(0, 2, 3, 1).contiguous().view(-1, c),
