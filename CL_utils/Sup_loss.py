@@ -38,7 +38,7 @@ class Compute_sup_loss:
         exp_dot_result = torch.exp(torch.matmul(X, X.T) / self.temperature)
 
         denominator = torch.sum(exp_dot_result, dim=1)
-        sup_loss = torch.tensor(0.0).cuda()
+        sup_loss = torch.zeros(1).cuda()
         for data_idx ,cat_id in enumerate(Y):
             pos = (Y == cat_id) # positive
             pos[data_idx] = False # remove itself
