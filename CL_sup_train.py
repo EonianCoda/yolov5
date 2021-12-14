@@ -351,7 +351,7 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
     sup_optimizer = SGD(g0, lr=hyp['lr0'], momentum=hyp['momentum'], nesterov=True)
     sup_optimizer.add_param_group({'params': g1, 'weight_decay': hyp['weight_decay']})  # add g1 with weight_decay
     sup_optimizer.add_param_group({'params': g2})  # add g2 (biases)
-    compute_sup_loss = Compute_sup_loss(compute_loss.build_target)
+    compute_sup_loss = Compute_sup_loss(compute_loss.build_targets)
     proj_network = Projection_network(nc=nc)
     sup_optimizer.add_param_group({'params': proj_network.parameters()})
     sup_scaler = amp.GradScaler(enabled=cuda)
