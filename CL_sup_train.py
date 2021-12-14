@@ -255,33 +255,6 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
     hyp['weight_decay'] *= batch_size * accumulate / nbs  # scale weight_decay
     LOGGER.info(f"Scaled weight_decay = {hyp['weight_decay']}")
 
-    g0, g1, g2 = [], [], []  # optimizer parameter groups
-    for v in model.modules():
-        if hasattr(v, 'bias') and isinstance(v.bias, nn.Parameter):  # bias
-            g2.append(v.bias)
-        if isinstance(v, nn.BatchNorm2d):  # weight (no decay)
-            g0.append(v.weight)
-        elif hasattr(v, 'weight') and isinstance(v.weight, nn.Parameter):  # weight (with decay)
-            g1.append(v.weight)
-
-    if opt.adam:
-        optimizer = Adam(g0, lr=hyp['lr0'], betas=(hyp['momentum'], 0.999))  # adjust beta1 to momentum
-    else:
-        optimizer = SGD(g0, lr=hyp['lr0'], momentum=hyp['momentum'], nesterov=True)
-
-    optimizer.add_param_group({'params': g1, 'weight_decay': hyp['weight_decay']})  # add g1 with weight_decay
-    optimizer.add_param_group({'params': g2})  # add g2 (biases)
-    LOGGER.info(f"{colorstr('optimizer:')} {type(optimizer).__name__} with parameter groups "
-                f"{len(g0)} weight, {len(g1)} weight (no decay), {len(g2)} bias")
-    del g0, g1, g2
-
-    # Scheduler
-    if opt.linear_lr:
-        lf = lambda x: (1 - x / (epochs - 1)) * (1.0 - hyp['lrf']) + hyp['lrf']  # linear
-    else:
-        lf = one_cycle(1, hyp['lrf'], epochs)  # cosine 1->hyp['lrf']
-    scheduler = lr_scheduler.LambdaLR(optimizer, lr_lambda=lf)  # plot_lr_scheduler(optimizer, scheduler, epochs)
-
     # EMA
     ema = ModelEMA(model) if RANK in [-1, 0] else None
 
@@ -359,7 +332,7 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
     last_opt_step = -1
     maps = np.zeros(nc)  # mAP per class
     results = (0, 0, 0, 0, 0, 0, 0)  # P, R, mAP@.5, mAP@.5-.95, val_loss(box, obj, cls)
-    scheduler.last_epoch = start_epoch - 1  # do not move
+    #scheduler.last_epoch = start_epoch - 1  # do not move
     scaler = amp.GradScaler(enabled=cuda)
     stopper = EarlyStopping(patience=opt.patience)
     compute_loss = ComputeLoss(model)  # init loss class
@@ -367,7 +340,14 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
                 f'Using {train_loader.num_workers} dataloader workers\n'
                 f"Logging results to {colorstr('bold', save_dir)}\n"
                 f'Starting training for {epochs} epochs...')
-    
+    g0, g1, g2 = [], [], []  # optimizer parameter groups
+    for v in model.modules():
+        if hasattr(v, 'bias') and isinstance(v.bias, nn.Parameter):  # bias
+            g2.append(v.bias)
+        if isinstance(v, nn.BatchNorm2d):  # weight (no decay)
+            g0.append(v.weight)
+        elif hasattr(v, 'weight') and isinstance(v.weight, nn.Parameter):  # weight (with decay)
+            g1.append(v.weight)
     sup_optimizer = SGD(g0, lr=hyp['lr0'], momentum=hyp['momentum'], nesterov=True)
     sup_optimizer.add_param_group({'params': g1, 'weight_decay': hyp['weight_decay']})  # add g1 with weight_decay
     sup_optimizer.add_param_group({'params': g2})  # add g2 (biases)
@@ -375,10 +355,18 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
     proj_network = Projection_network(nc=nc)
     sup_optimizer.add_param_group({'params': proj_network.parameters()})
     sup_scaler = amp.GradScaler(enabled=cuda)
-    sup_scheduler = lr_scheduler.LambdaLR(optimizer, lr_lambda=lf)  # plot_lr_scheduler(optimizer, scheduler, epochs)
 
+    # Scheduler
+    if opt.linear_lr:
+        lf = lambda x: (1 - x / (epochs - 1)) * (1.0 - hyp['lrf']) + hyp['lrf']  # linear
+    else:
+        lf = one_cycle(1, hyp['lrf'], epochs)  # cosine 1->hyp['lrf']
+    sup_scheduler = lr_scheduler.LambdaLR(sup_optimizer, lr_lambda=lf)  # plot_lr_scheduler(optimizer, scheduler, epochs)
+    del g0, g1, g2
     sup_scheduler.last_epoch = - 1
-    for sup_epoch in range(30):
+
+    # Supervised-contrastive loss
+    for sup_epoch in range(10):
         model.train()
         pbar = enumerate(train_loader)
         pbar = tqdm(pbar, total=nb)  # progress bar
@@ -422,10 +410,41 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
                 # if ema:
                 #     ema.update(model)
                 last_opt_step = ni
+    
+    
+    del sup_scaler, sup_scheduler, sup_optimizer
     # Scheduler
     lr = [x['lr'] for x in sup_optimizer.param_groups]  # for loggers
     sup_scheduler.step()
 
+
+    g0, g1, g2 = [], [], []  # optimizer parameter groups
+    for v in model.modules():
+        if hasattr(v, 'bias') and isinstance(v.bias, nn.Parameter):  # bias
+            g2.append(v.bias)
+        if isinstance(v, nn.BatchNorm2d):  # weight (no decay)
+            g0.append(v.weight)
+        elif hasattr(v, 'weight') and isinstance(v.weight, nn.Parameter):  # weight (with decay)
+            g1.append(v.weight)
+
+    if opt.adam:
+        optimizer = Adam(g0, lr=hyp['lr0'], betas=(hyp['momentum'], 0.999))  # adjust beta1 to momentum
+    else:
+        optimizer = SGD(g0, lr=hyp['lr0'], momentum=hyp['momentum'], nesterov=True)
+
+    optimizer.add_param_group({'params': g1, 'weight_decay': hyp['weight_decay']})  # add g1 with weight_decay
+    optimizer.add_param_group({'params': g2})  # add g2 (biases)
+    LOGGER.info(f"{colorstr('optimizer:')} {type(optimizer).__name__} with parameter groups "
+                f"{len(g0)} weight, {len(g1)} weight (no decay), {len(g2)} bias")
+    del g0, g1, g2
+
+    # Scheduler
+    if opt.linear_lr:
+        lf = lambda x: (1 - x / (epochs - 1)) * (1.0 - hyp['lrf']) + hyp['lrf']  # linear
+    else:
+        lf = one_cycle(1, hyp['lrf'], epochs)  # cosine 1->hyp['lrf']
+    scheduler = lr_scheduler.LambdaLR(optimizer, lr_lambda=lf)  # plot_lr_scheduler(optimizer, scheduler, epochs)
+    scheduler.last_epoch = start_epoch - 1
     for epoch in range(start_epoch, epochs):  # epoch ------------------------------------------------------------------
         model.train()
         # Warm up
