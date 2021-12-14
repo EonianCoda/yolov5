@@ -47,7 +47,7 @@ from utils.metrics import fitness
 from utils.loggers import Loggers
 from utils.callbacks import Callbacks
 
-
+from CL_utils.Sup_loss import Projection_network, Compute_sup_loss
 from CL_utils.CL_manager import CL_manager
 
 LOGGER = logging.getLogger(__name__)
@@ -368,6 +368,64 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
                 f"Logging results to {colorstr('bold', save_dir)}\n"
                 f'Starting training for {epochs} epochs...')
     
+    sup_optimizer = SGD(g0, lr=hyp['lr0'], momentum=hyp['momentum'], nesterov=True)
+    sup_optimizer.add_param_group({'params': g1, 'weight_decay': hyp['weight_decay']})  # add g1 with weight_decay
+    sup_optimizer.add_param_group({'params': g2})  # add g2 (biases)
+    compute_sup_loss = Compute_sup_loss(compute_loss.build_target)
+    proj_network = Projection_network(nc=nc)
+    sup_optimizer.add_param_group({'params': proj_network.parameters()})
+    sup_scaler = amp.GradScaler(enabled=cuda)
+    sup_scheduler = lr_scheduler.LambdaLR(optimizer, lr_lambda=lf)  # plot_lr_scheduler(optimizer, scheduler, epochs)
+
+    sup_scheduler.last_epoch = - 1
+    for sup_epoch in range(30):
+        model.train()
+        pbar = enumerate(train_loader)
+        pbar = tqdm(pbar, total=nb)  # progress bar
+        sup_optimizer.zero_grad()
+        for i, (imgs, targets, paths, _) in pbar:  # batch -------------------------------------------------------------
+            ni = i + nb * sup_epoch
+            imgs = imgs.to(device, non_blocking=True).float() / 255.0  # uint8 to float32, 0-255 to 0.0-1.0
+            # Warmup
+            if ni <= nw:
+                xi = [0, nw]  # x interp
+                # compute_loss.gr = np.interp(ni, xi, [0.0, 1.0])  # iou loss ratio (obj_loss = 1.0 or iou)
+                accumulate = max(1, np.interp(ni, xi, [1, nbs / batch_size]).round())
+                for j, x in enumerate(sup_optimizer.param_groups):
+                    # bias lr falls from 0.1 to lr0, all other lrs rise from 0.0 to lr0
+                    x['lr'] = np.interp(ni, xi, [hyp['warmup_bias_lr'] if j == 2 else 0.0, x['initial_lr'] * lf(sup_epoch)])
+                    if 'momentum' in x:
+                        x['momentum'] = np.interp(ni, xi, [hyp['warmup_momentum'], hyp['momentum']])
+
+
+            # Forward
+            with amp.autocast(enabled=cuda):
+                _ , feats = model.forward_feat(imgs)  # forward
+
+                # loss, loss_items = compute_loss(pred, targets.to(device))  # loss scaled by batch_size
+                feats = [feats[i] for i in [17, 20, 23]]
+                pred = proj_network(feats)
+                loss, loss_items = compute_sup_loss(pred, targets.to(device))
+                print("Epoch {} | iteration {} |Loss = {:.3f}".format(sup_epoch, i, loss))
+                if RANK != -1:
+                    loss *= WORLD_SIZE  # gradient averaged between devices in DDP mode
+                if opt.quad:
+                    loss *= 4.
+            # Backward
+            sup_scaler.scale(loss).backward()
+
+            # Optimize
+            if ni - last_opt_step >= accumulate:
+                sup_scaler.step(sup_optimizer)  # optimizer.step
+                sup_scaler.update()
+                sup_optimizer.zero_grad()
+                # if ema:
+                #     ema.update(model)
+                last_opt_step = ni
+    # Scheduler
+    lr = [x['lr'] for x in sup_optimizer.param_groups]  # for loggers
+    sup_scheduler.step()
+
     for epoch in range(start_epoch, epochs):  # epoch ------------------------------------------------------------------
         model.train()
         # Warm up
