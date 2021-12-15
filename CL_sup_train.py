@@ -352,7 +352,7 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
     sup_optimizer.add_param_group({'params': g1, 'weight_decay': hyp['weight_decay']})  # add g1 with weight_decay
     sup_optimizer.add_param_group({'params': g2})  # add g2 (biases)
     compute_sup_loss = Compute_sup_loss(compute_loss.build_targets)
-    proj_network = Projection_network(nc=nc).half().cuda()
+    proj_network = Projection_network(nc=nc).cuda()
     sup_optimizer.add_param_group({'params': proj_network.parameters()})
     sup_scaler = amp.GradScaler(enabled=cuda)
 
@@ -393,8 +393,8 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
                 # loss, loss_items = compute_loss(pred, targets.to(device))  # loss scaled by batch_size
                 feats = [feats[i] for i in [17, 20, 23]]
                 pred = proj_network(feats)
-                loss, loss_items = compute_sup_loss(pred, targets.to(device))
-                print("Epoch {} | iteration {} |Loss = {:.3f}".format(sup_epoch, i, loss))
+                loss = compute_sup_loss(pred, targets.to(device))
+                print("Epoch {} | iteration {} |Loss = {:.3f}".format(sup_epoch, i, float(loss)))
                 if RANK != -1:
                     loss *= WORLD_SIZE  # gradient averaged between devices in DDP mode
                 if opt.quad:
@@ -411,12 +411,10 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
                 #     ema.update(model)
                 last_opt_step = ni
     
-    
+            # Scheduler
+        lr = [x['lr'] for x in sup_optimizer.param_groups]  # for loggers
+        sup_scheduler.step()
     del sup_scaler, sup_scheduler, sup_optimizer
-    # Scheduler
-    lr = [x['lr'] for x in sup_optimizer.param_groups]  # for loggers
-    sup_scheduler.step()
-
 
     g0, g1, g2 = [], [], []  # optimizer parameter groups
     for v in model.modules():
