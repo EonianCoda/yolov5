@@ -21,7 +21,7 @@ class Projection_network(nn.Module):
         return x
 
 class Compute_sup_loss:
-    def __init__(self, build_target, temperature = 3) -> None:
+    def __init__(self, build_target=None, temperature = 3.0) -> None:
         self.build_targets = build_target
         self.temperature = temperature
     def __call__(self, pred, targets):
