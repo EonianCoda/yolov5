@@ -446,9 +446,10 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
                     loss += dist_loss
                 else:
                     pred, feats = model.forward_feat(imgs)  # forward
-                    feats = [feats[i] for i in [17, 20, 23]]
                     loss, loss_items = compute_loss(pred, targets.to(device))  # loss scaled by batch_size
-                    sup_loss = compute_sup_loss(pred, targets.to(device))
+                    feats = [feats[i] for i in [17, 20, 23]]
+                    sup_loss = compute_sup_loss(proj_net(feats), targets.to(device))
+                    print("Epoch {} | Sup loss :{:.4f}".format(epoch, float(sup_loss)))
                     avg_sup_loss.append(float(sup_loss))
                     loss += sup_loss
                 if RANK != -1:
@@ -506,6 +507,7 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
             if fi > best_fitness:
                 best_fitness = fi
             log_vals = list(mloss) + list(results) + lr
+            lr = lr[:3]
             callbacks.run('on_fit_epoch_end', log_vals, epoch, best_fitness, fi)
 
             # Save model
