@@ -276,7 +276,7 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
     del g0, g1, g2
 
 
-    proj_net = Projection_network(nc=nc)
+    proj_net = Projection_network(nc=nc).cuda()
     
     bias, weight = [], []
     for v in proj_net.modules():
