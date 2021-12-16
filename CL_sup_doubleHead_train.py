@@ -483,7 +483,7 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
         # Scheduler
         lr = [x['lr'] for x in optimizer.param_groups]  # for loggers
         scheduler.step()
-        print("Epoch {} | Avg sup loss: {:.4f}".format(epoch, sum(avg_sup_loss) / len(avg_sup_loss)))
+        # print("Epoch {} | Avg sup loss: {:.4f}".format(epoch, sum(avg_sup_loss) / len(avg_sup_loss)))
         if RANK in [-1, 0]:
             # mAP
             callbacks.run('on_train_epoch_end', epoch=epoch)
