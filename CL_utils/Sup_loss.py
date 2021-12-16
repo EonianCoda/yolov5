@@ -21,11 +21,13 @@ class Projection_network(nn.Module):
         return x
 
 class Compute_sup_loss:
-    def __init__(self, build_target=None, temperature = 3.0) -> None:
+    def __init__(self, batch_size, build_target=None, temperature = 3.0) -> None:
         self.build_targets = build_target
         self.temperature = temperature
-    def __call__(self, pred, targets):
-        tcls, tbox, indices, anchors = self.build_targets(pred, targets)
+        self.batch_size = batch_size
+    def __call__(self, pred, tcls, indices):
+        #tcls, tbox, indices, anchors = self.build_targets(pred, targets)
+
         X = []
         Y = []
         for i, z in enumerate(pred):
@@ -45,5 +47,6 @@ class Compute_sup_loss:
             loss = torch.log(exp_dot_result[data_idx, pos] / (denominator[data_idx] - exp_dot_result[data_idx, data_idx])).sum()
             sup_loss += loss / pos.sum()
         sup_loss *= -1
-        sup_loss /= X.shape[0]
+        sup_loss /= self.batch_size
+        #sup_loss /= X.shape[0]
         return sup_loss

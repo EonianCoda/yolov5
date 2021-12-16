@@ -376,13 +376,15 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
     scheduler.last_epoch = start_epoch - 1  # do not move
     scaler = amp.GradScaler(enabled=cuda)
     stopper = EarlyStopping(patience=opt.patience)
-    compute_loss = ComputeLoss(model)  # init loss class
+
+    compute_sup_loss = Compute_sup_loss(batch_size=batch_size)
+
+    compute_loss = ComputeLoss(model, sup_loss=compute_sup_loss)  # init loss class
     LOGGER.info(f'Image sizes {imgsz} train, {imgsz} val\n'
                 f'Using {train_loader.num_workers} dataloader workers\n'
                 f"Logging results to {colorstr('bold', save_dir)}\n"
                 f'Starting training for {epochs} epochs...')
-
-    compute_sup_loss = Compute_sup_loss(compute_loss.build_targets)
+    
     for epoch in range(start_epoch, epochs):  # epoch ------------------------------------------------------------------
         avg_sup_loss = []
         model.train()
@@ -446,12 +448,12 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
                     loss += dist_loss
                 else:
                     pred, feats = model.forward_feat(imgs)  # forward
-                    loss, loss_items = compute_loss(pred, targets.to(device))  # loss scaled by batch_size
                     feats = [feats[i] for i in [17, 20, 23]]
-                    sup_loss = compute_sup_loss(proj_net(feats), targets.to(device))
-                    print("Epoch {} | Sup loss :{:.4f}".format(epoch, float(sup_loss)))
-                    avg_sup_loss.append(float(sup_loss))
-                    loss += sup_loss
+                    loss, loss_items = compute_loss(pred, targets.to(device), proj_net(feats))  # loss scaled by batch_size
+                    #sup_loss = compute_sup_loss(, targets.to(device))
+                    # print("Epoch {} | Sup loss :{:.4f}".format(epoch, float(sup_loss)))
+                    # avg_sup_loss.append(float(sup_loss))
+                    # loss += sup_loss
                 if RANK != -1:
                     loss *= WORLD_SIZE  # gradient averaged between devices in DDP mode
                 if opt.quad:
