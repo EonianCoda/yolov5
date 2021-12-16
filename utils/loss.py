@@ -166,7 +166,7 @@ class ComputeLoss:
         bs = tobj.shape[0]  # batch size
 
         sup_loss = torch.zeros(1).cuda()
-        if self.sup_loss !=None:
+        if self.sup_loss != None and proj_feats != None:
             sup_loss = self.sup_loss(proj_feats, tcls, indices)
             print("Sup loss = {:.4f}".format(float(sup_loss)))
         return (lbox + lobj + lcls) * bs + sup_loss, torch.cat((lbox, lobj, lcls)).detach()
