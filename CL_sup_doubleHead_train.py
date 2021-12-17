@@ -230,6 +230,11 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
     model.load_state_dict(csd, strict=False)  # load
     LOGGER.info(f'Transferred {len(csd)}/{len(model.state_dict())} items from {weights}')  # report
 
+    proj_net = Projection_network(nc=nc).cuda()
+    if "proj_net" in ckpt.key():
+        print("Loading proj net")
+        proj_net.load_state_dict(ckpt['proj_net'])
+
     # add distillation loss
     if distill:
         import copy
@@ -276,7 +281,7 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
     del g0, g1, g2
 
 
-    proj_net = Projection_network(nc=nc).cuda()
+    
     
     bias, weight = [], []
     for v in proj_net.modules():
@@ -386,7 +391,7 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
                 f'Starting training for {epochs} epochs...')
     
     for epoch in range(start_epoch, epochs):  # epoch ------------------------------------------------------------------
-        avg_sup_loss = []
+        #avg_sup_loss = []
         model.train()
         # Warm up
         if warm_up:

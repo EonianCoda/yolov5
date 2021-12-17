@@ -46,7 +46,5 @@ class Compute_sup_loss:
             pos[data_idx] = False # remove itself
             loss = torch.log(exp_dot_result[data_idx, pos] / (denominator[data_idx] - exp_dot_result[data_idx, data_idx])).sum()
             sup_loss += loss / pos.sum()
-        sup_loss *= -1
-        sup_loss /= self.batch_size
-        #sup_loss /= X.shape[0]
+        sup_loss /= ((X.shape[0] * -1) / 2)
         return sup_loss
