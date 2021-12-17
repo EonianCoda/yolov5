@@ -231,7 +231,7 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
     LOGGER.info(f'Transferred {len(csd)}/{len(model.state_dict())} items from {weights}')  # report
 
     proj_net = Projection_network(nc=nc).cuda()
-    if "proj_net" in ckpt.key():
+    if "proj_net" in ckpt.keys():
         print("Loading proj net")
         proj_net.load_state_dict(ckpt['proj_net'])
 
