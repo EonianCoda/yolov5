@@ -521,7 +521,8 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
                         'ema': deepcopy(ema.ema).half(),
                         'updates': ema.updates,
                         'optimizer': optimizer.state_dict(),
-                        'wandb_id': loggers.wandb.wandb_run.id if loggers.wandb else None}
+                        'wandb_id': loggers.wandb.wandb_run.id if loggers.wandb else None,
+                        'proj_net': proj_net.state_dict()}
 
                 # Save last, best and delete
                 torch.save(ckpt, last)
