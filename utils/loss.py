@@ -169,7 +169,9 @@ class ComputeLoss:
         if self.sup_loss != None and proj_feats != None:
             sup_loss = self.sup_loss(proj_feats, tcls, indices)
             print("Sup loss = {:.4f}".format(float(sup_loss)))
-        return (lbox + lobj + lcls) * bs + sup_loss, torch.cat((lbox, lobj, lcls)).detach()
+            return (lbox + lobj + lcls) * bs + sup_loss, torch.cat((lbox, lobj, lcls)).detach(), float(sup_loss)
+        else:
+            return (lbox + lobj + lcls) * bs, torch.cat((lbox, lobj, lcls)).detach()
 
     def build_targets(self, p, targets):
         # Build targets for compute_loss(), input targets(image,class,x,y,w,h)

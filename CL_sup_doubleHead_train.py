@@ -389,9 +389,9 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
                 f'Using {train_loader.num_workers} dataloader workers\n'
                 f"Logging results to {colorstr('bold', save_dir)}\n"
                 f'Starting training for {epochs} epochs...')
-    
+    avg_sup_losses = []
     for epoch in range(start_epoch, epochs):  # epoch ------------------------------------------------------------------
-        #avg_sup_loss = []
+        avg_sup_loss = []
         model.train()
         # Warm up
         if warm_up:
@@ -454,10 +454,11 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
                 else:
                     pred, feats = model.forward_feat(imgs)  # forward
                     feats = [feats[i] for i in [17, 20, 23]]
-                    loss, loss_items = compute_loss(pred, targets.to(device), proj_net(feats))  # loss scaled by batch_size
+                    loss, loss_items, sup_loss = compute_loss(pred, targets.to(device), proj_net(feats))  # loss scaled by batch_size
+                
                     #sup_loss = compute_sup_loss(, targets.to(device))
                     # print("Epoch {} | Sup loss :{:.4f}".format(epoch, float(sup_loss)))
-                    # avg_sup_loss.append(float(sup_loss))
+                    avg_sup_loss.append(float(sup_loss))
                     # loss += sup_loss
                 if RANK != -1:
                     loss *= WORLD_SIZE  # gradient averaged between devices in DDP mode
@@ -488,7 +489,8 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
         # Scheduler
         lr = [x['lr'] for x in optimizer.param_groups]  # for loggers
         scheduler.step()
-        # print("Epoch {} | Avg sup loss: {:.4f}".format(epoch, sum(avg_sup_loss) / len(avg_sup_loss)))
+        avg_sup_losses.append(sum(avg_sup_loss) / len(avg_sup_loss))
+        print("Epoch {} | Avg sup loss: {:.4f}".format(epoch, sum(avg_sup_loss) / len(avg_sup_loss)))
         if RANK in [-1, 0]:
             # mAP
             callbacks.run('on_train_epoch_end', epoch=epoch)
@@ -552,6 +554,10 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
 
         # end epoch ----------------------------------------------------------------------------------------------------
     # end training -----------------------------------------------------------------------------------------------------
+    with open(save_dir / "sup_losses.txt", 'w') as f:
+        for n in avg_sup_losses:
+            f.write(str(n) + '\n')
+        f.writelines()
     if RANK in [-1, 0]:
         LOGGER.info(f'\n{epoch - start_epoch + 1} epochs completed in {(time.time() - t0) / 3600:.3f} hours.')
         if not evolve:
